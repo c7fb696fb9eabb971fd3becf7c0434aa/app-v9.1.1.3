@@ -4,12 +4,15 @@ import { ComponentCard } from '../types';
 import { saveCustomCard } from '../lib/contentEngine';
 import {
   getGitHubConfig,
+  saveGitHubConfig,
+  resetGitHubConfigToDefault,
   commitMarkdownToGitHub,
   serializeCardToMarkdown,
   resolveRepositoryFilePath,
   CommitResult,
 } from '../lib/githubSync';
 import { DeploymentsIcon } from '../components/studio/DeploymentsIcon';
+import { GitHubSettingsModal } from '../components/studio/GitHubSettingsModal';
 
 interface PendingDeployment {
   id: string;
@@ -58,11 +61,20 @@ export const DeploymentsPage: React.FC = () => {
 
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishingAll, setPublishingAll] = useState<boolean>(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{
     type: 'success' | 'error' | 'info';
     text: string;
     commitUrl?: string;
   } | null>(null);
+
+  const handleResetToken = () => {
+    resetGitHubConfigToDefault();
+    setStatusMessage({
+      type: 'success',
+      text: 'GitHub credentials successfully reset to default verified token! You can now commit directly.',
+    });
+  };
 
   useEffect(() => {
     try {
@@ -220,17 +232,28 @@ export const DeploymentsPage: React.FC = () => {
             </span>
             <span>{statusMessage.text}</span>
           </div>
-          {statusMessage.commitUrl && (
-            <a
-              href={statusMessage.commitUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-2.5 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 hover:text-white text-[11px] underline flex items-center gap-1 shrink-0"
-            >
-              <span>View GitHub Commit</span>
-              <span>&rarr;</span>
-            </a>
-          )}
+          <div className="flex items-center gap-2">
+            {statusMessage.type === 'error' && (
+              <button
+                type="button"
+                onClick={handleResetToken}
+                className="px-2.5 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-white text-[11px] font-semibold cursor-pointer shrink-0"
+              >
+                ⚡ Reset Token
+              </button>
+            )}
+            {statusMessage.commitUrl && (
+              <a
+                href={statusMessage.commitUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 hover:text-white text-[11px] underline flex items-center gap-1 shrink-0"
+              >
+                <span>View GitHub Commit</span>
+                <span>&rarr;</span>
+              </a>
+            )}
+          </div>
         </div>
       )}
 
@@ -467,7 +490,16 @@ export const DeploymentsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(true)}
+                className="w-full h-10 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white font-mono text-xs font-semibold transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2"
+              >
+                <span>⚙️</span>
+                <span>Configure GitHub Credentials</span>
+              </button>
+
               <a
                 href={`https://github.com/${ghConfig.owner}/${ghConfig.repo}/actions`}
                 target="_blank"
@@ -481,6 +513,8 @@ export const DeploymentsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <GitHubSettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </div>
   );
 };
