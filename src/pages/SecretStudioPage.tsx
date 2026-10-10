@@ -17,7 +17,12 @@ import { PdfAttachmentIcon } from '../components/studio/PdfAttachmentIcon';
 import { VideoAttachmentIcon } from '../components/studio/VideoAttachmentIcon';
 import { TreeFolderIcon, TreeCloseIcon } from '../components/studio/icons/TreeIcons';
 import { GitHubSettingsModal } from '../components/studio/GitHubSettingsModal';
-import { commitMarkdownToGitHub, serializeCardToMarkdown } from '../lib/githubSync';
+import {
+  commitMarkdownToGitHub,
+  serializeCardToMarkdown,
+  resolveRepositoryFilePath,
+  getGitHubConfig,
+} from '../lib/githubSync';
 
 export const SecretStudioPage: React.FC = () => {
   const navigate = useNavigate();
@@ -76,6 +81,13 @@ export const SecretStudioPage: React.FC = () => {
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [isSyncActive, setIsSyncActive] = useState(false);
+  const [isPublishingToGitHub, setIsPublishingToGitHub] = useState(false);
+  const [githubCommitStatus, setGithubCommitStatus] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+    commitUrl?: string;
+    commitSha?: string;
+  } | null>(null);
 
   const handleTriggerSync = () => {
     setIsSyncActive(true);
@@ -243,9 +255,9 @@ export const SecretStudioPage: React.FC = () => {
     selectedPagePath,
   ]);
 
-  // Save & Deploy Card Action (Saves locally AND commits directly to GitHub repository)
-  const handleSaveAndDeploy = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Commit and Push Directly to GitHub Repository
+  const handleSaveAndDeploy = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!title.trim()) return;
 
     const targetPath = selectedPagePath;
@@ -257,24 +269,68 @@ export const SecretStudioPage: React.FC = () => {
       pagePath: targetPath,
     };
 
-    // 1. Save locally for immediate runtime rendering
+    setIsPublishingToGitHub(true);
+    setGithubCommitStatus({
+      type: 'info',
+      text: `Committing "${title.trim()}" directly to GitHub repository...`,
+    });
+
+    // 1. Save locally for immediate runtime preview
     saveCustomCard(cardToSave, targetPath, '01-hnc');
 
     // 2. Commit directly to GitHub repository source (src/content/...)
-    const slug = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const folderSlug = targetPath.replace(/^\/home\/?/, '').replace(/\//g, '-');
-    const filePath = `src/content/${folderSlug || 'general'}/01-hnc/${slug}.md`;
+    const filePath = resolveRepositoryFilePath(targetPath, title, Number(order) || 1);
     const markdownContent = serializeCardToMarkdown(cardToSave);
 
     const githubResult = await commitMarkdownToGitHub(
       filePath,
       markdownContent,
-      `docs(studio): publish card "${title.trim()}" to ${targetPath}`
+      `docs(studio): commit card "${title.trim()}" to ${targetPath} [skip ci]`
     );
 
-    if (!githubResult.success) {
-      console.warn('GitHub direct commit skipped or failed:', githubResult.error);
+    setIsPublishingToGitHub(false);
+
+    if (githubResult.success) {
+      setGithubCommitStatus({
+        type: 'success',
+        text: `Committed "${title.trim()}" to GitHub main!`,
+        commitUrl: githubResult.commitUrl,
+        commitSha: githubResult.commitSha,
+      });
+
+      // Clear from pending queue if present
+      try {
+        const raw = localStorage.getItem('greendocs_pending_deployments_v1');
+        const existing = raw ? JSON.parse(raw) : [];
+        const filtered = existing.filter((item: any) => item.id !== cardId);
+        localStorage.setItem('greendocs_pending_deployments_v1', JSON.stringify(filtered));
+      } catch (err) {
+        // ignore
+      }
+
+      setShowSavedToast(true);
+      setTimeout(() => setShowSavedToast(false), 3500);
+    } else {
+      setGithubCommitStatus({
+        type: 'error',
+        text: `GitHub Push Failed: ${githubResult.error || 'Check repository access token'}`,
+      });
     }
+  };
+
+  // Queue to Deployments review board without immediate push
+  const handleQueueInDeployments = () => {
+    if (!title.trim()) return;
+    const targetPath = selectedPagePath;
+    const cardId = selectedCardId || `card-${Date.now()}`;
+
+    const cardToSave: ComponentCard = {
+      ...previewCard,
+      id: cardId,
+      pagePath: targetPath,
+    };
+
+    saveCustomCard(cardToSave, targetPath, '01-hnc');
 
     const newDeploymentItem = {
       id: cardId,
@@ -293,10 +349,10 @@ export const SecretStudioPage: React.FC = () => {
       // ignore
     }
 
-    setShowSavedToast(true);
-    setTimeout(() => {
-      setShowSavedToast(false);
-    }, 3500);
+    setGithubCommitStatus({
+      type: 'info',
+      text: `Card queued in Deployments Portal. You can review and publish to GitHub from there.`,
+    });
   };
 
   const handleDeleteCurrentCard = () => {
@@ -373,19 +429,32 @@ export const SecretStudioPage: React.FC = () => {
             onSubmit={handleSaveAndDeploy}
             className="rounded-xl border border-white/[0.08] bg-[#070a0e]/90 backdrop-blur-md p-5 flex flex-col justify-between h-full shadow-2xl"
           >
-            {showSavedToast && (
-              <div className="mb-4 p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-xs flex items-center justify-between animate-fadeIn">
-                <span className="flex items-center gap-2">
-                  <DeploymentsIcon size={14} className="text-emerald-400 shrink-0" />
-                  <span>Card successfully saved and queued for deployment review!</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => navigate('/deployments')}
-                  className="underline hover:text-emerald-200 cursor-pointer text-[11px]"
-                >
-                  View in Deployments &rarr;
-                </button>
+            {githubCommitStatus && (
+              <div
+                className={`mb-4 p-3 rounded-lg border font-mono text-xs flex items-center justify-between gap-3 animate-fadeIn ${
+                  githubCommitStatus.type === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : githubCommitStatus.type === 'error'
+                    ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+                    : 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0">
+                    {githubCommitStatus.type === 'success' ? '✓' : githubCommitStatus.type === 'error' ? '✕' : '⚡'}
+                  </span>
+                  <span className="truncate">{githubCommitStatus.text}</span>
+                </div>
+                {githubCommitStatus.commitUrl && (
+                  <a
+                    href={githubCommitStatus.commitUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-emerald-200 hover:text-white shrink-0 text-[11px] font-semibold"
+                  >
+                    View Commit &rarr;
+                  </a>
+                )}
               </div>
             )}
 
@@ -728,24 +797,34 @@ export const SecretStudioPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Bottom Action Button (Centered) */}
-              <div className="flex items-center justify-center pt-4">
+              {/* Bottom Action Buttons (Dual actions: Direct GitHub Commit & Staging Queue) */}
+              <div className="flex items-center justify-center gap-3 pt-4 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleQueueInDeployments}
+                  className="h-11 px-4 rounded-md border border-white/[0.08] bg-[#070a0e]/90 hover:border-amber-500/40 hover:bg-[#0c121a]/95 backdrop-blur-md text-amber-300 hover:text-white font-mono text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                  title="Stage card in Deployments Portal review queue"
+                >
+                  <span>📥 Queue in Deployments</span>
+                </button>
+
                 <button
                   type="submit"
-                  className="h-11 px-6 rounded-md border border-white/[0.08] bg-[#070a0e]/90 hover:border-emerald-500/40 hover:bg-[#0c121a]/95 backdrop-blur-md text-emerald-300 hover:text-white font-mono text-xs sm:text-[13px] font-semibold flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer shadow-sm group focus:outline-none focus:ring-1 focus:ring-emerald-400 active:scale-95"
+                  disabled={isPublishingToGitHub}
+                  className="h-11 px-6 rounded-md border border-emerald-500/40 bg-emerald-500 hover:bg-emerald-400 text-black font-mono text-xs sm:text-[13px] font-bold flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer shadow-lg disabled:opacity-50"
+                  title="Commit and push markdown file directly to GitHub repository (main branch)"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-4 h-4 text-emerald-400"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span>Save & Deploy Card</span>
+                  {isPublishingToGitHub ? (
+                    <>
+                      <span className="animate-spin text-sm">⏳</span>
+                      <span>Committing to GitHub...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm">⚡</span>
+                      <span>Commit &amp; Push to GitHub</span>
+                    </>
+                  )}
                 </button>
               </div>
           </form>

@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithGithub = async (_redirectPath?: string): Promise<void> => {
-    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || 'Ov23lia5n28LWDlbVJLZ';
 
     if (clientId) {
       // Real production GitHub OAuth popup flow

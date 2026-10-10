@@ -10,7 +10,7 @@ export default defineConfig(() => {
   // 3. Fallback for production: "/greenapp/"
   // 4. Local dev: "/"
   const ghRepo = process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : null;
-  const base = process.env.BASE_URL || ghRepo || (process.env.NODE_ENV === 'production' ? '/greenapp/' : '/');
+  const base = process.env.BASE_URL || ghRepo || (process.env.NODE_ENV === 'production' ? '/app-v9.1.1.3/' : '/');
 
   return {
     base,
