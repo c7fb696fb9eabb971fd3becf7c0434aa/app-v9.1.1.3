@@ -285,7 +285,7 @@ export const SecretStudioPage: React.FC = () => {
     const githubResult = await commitMarkdownToGitHub(
       filePath,
       markdownContent,
-      `docs(studio): commit card "${title.trim()}" to ${targetPath} [skip ci]`
+      `docs(studio): commit card "${title.trim()}" to ${targetPath}`
     );
 
     setIsPublishingToGitHub(false);

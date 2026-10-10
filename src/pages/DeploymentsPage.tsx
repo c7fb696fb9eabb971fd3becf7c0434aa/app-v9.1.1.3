@@ -9,6 +9,7 @@ import {
   commitMarkdownToGitHub,
   serializeCardToMarkdown,
   resolveRepositoryFilePath,
+  triggerGitHubPagesDeploy,
   CommitResult,
 } from '../lib/githubSync';
 import { DeploymentsIcon } from '../components/studio/DeploymentsIcon';
@@ -107,7 +108,7 @@ export const DeploymentsPage: React.FC = () => {
         item.cardData.order || 1
       );
       const markdownContent = serializeCardToMarkdown(item.cardData);
-      const commitMessage = `docs(gui): publish "${item.title}" to ${item.targetPath} [skip ci]`;
+      const commitMessage = `docs(gui): publish "${item.title}" to ${item.targetPath}`;
 
       const result = await commitMarkdownToGitHub(filePath, markdownContent, commitMessage);
 
@@ -171,6 +172,29 @@ export const DeploymentsPage: React.FC = () => {
       type: 'success',
       text: `Batch publish complete: ${successCount} of ${pendingDeployments.length} files committed to GitHub!`,
     });
+  };
+
+  const [isTriggeringWorkflow, setIsTriggeringWorkflow] = useState(false);
+
+  const handleTriggerRebuild = async () => {
+    setIsTriggeringWorkflow(true);
+    setStatusMessage({
+      type: 'info',
+      text: 'Triggering GitHub Pages deployment workflow on GitHub Actions...',
+    });
+    const res = await triggerGitHubPagesDeploy();
+    setIsTriggeringWorkflow(false);
+    if (res.success) {
+      setStatusMessage({
+        type: 'success',
+        text: 'Deploy to GitHub Pages workflow dispatched successfully! Check Actions pipeline below.',
+      });
+    } else {
+      setStatusMessage({
+        type: 'error',
+        text: `Workflow trigger note: ${res.error || 'Failed to trigger workflow. Verify token permissions.'}`,
+      });
+    }
   };
 
   const handleClearHistory = () => {
@@ -500,14 +524,33 @@ export const DeploymentsPage: React.FC = () => {
                 <span>Configure GitHub Credentials</span>
               </button>
 
+              <button
+                type="button"
+                disabled={isTriggeringWorkflow}
+                onClick={handleTriggerRebuild}
+                className="w-full h-10 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 font-mono text-xs font-semibold transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isTriggeringWorkflow ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    <span>Triggering Workflow...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>⚡</span>
+                    <span>Trigger GitHub Pages Deployment</span>
+                  </>
+                )}
+              </button>
+
               <a
                 href={`https://github.com/${ghConfig.owner}/${ghConfig.repo}/actions`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full h-10 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 font-mono text-xs font-semibold transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2"
+                className="w-full h-9 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white font-mono text-[11px] transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2"
               >
-                <span>⚡</span>
-                <span>Open GitHub Actions Pipeline</span>
+                <span>📁</span>
+                <span>Open GitHub Actions Pipeline &rarr;</span>
               </a>
             </div>
           </div>

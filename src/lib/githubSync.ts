@@ -310,3 +310,60 @@ ${card.deepDive?.typescriptInterface || 'interface ComponentConfig {\n  id: stri
 \`\`\`
 `;
 }
+
+/**
+ * Triggers the GitHub Actions deployment workflow via the GitHub API on demand.
+ */
+export async function triggerGitHubPagesDeploy(): Promise<{ success: boolean; error?: string }> {
+  const config = getGitHubConfig();
+  const token = (config.token || '').trim();
+  const owner = (config.owner || '').trim();
+  const repo = (config.repo || '').trim();
+  const branch = (config.branch || 'main').trim();
+
+  if (!token || !owner || !repo) {
+    return { success: false, error: 'Missing GitHub configuration or token.' };
+  }
+
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/deploy.yml/dispatches`;
+
+  try {
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: branch,
+      }),
+    });
+
+    if (res.ok || res.status === 204) {
+      return { success: true };
+    }
+
+    // Try Bearer header
+    const resBearer = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: branch,
+      }),
+    });
+
+    if (resBearer.ok || resBearer.status === 204) {
+      return { success: true };
+    }
+
+    const err = await resBearer.json().catch(() => ({}));
+    return { success: false, error: err.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error triggering deployment' };
+  }
+}

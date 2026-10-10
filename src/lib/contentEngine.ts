@@ -914,6 +914,20 @@ export function saveCustomCard(
     const deletedCards = getDeletedCardIds().filter((id) => id !== card.id);
     localStorage.setItem(DELETED_CARDS_STORAGE_KEY, JSON.stringify(deletedCards));
 
+    // Automatically ensure page hierarchy exists in registry so it is immediately visible
+    try {
+      const cleanSegments = effectivePagePath.replace(/^\/home\/?/, '').split('/').filter(Boolean);
+      let currentPath = '/home';
+      for (let i = 0; i < cleanSegments.length; i++) {
+        const seg = cleanSegments[i];
+        const parentPath = currentPath === '/home' ? undefined : currentPath;
+        currentPath = `${currentPath}/${seg}`;
+        createDynamicPage(humanizeSlug(seg), 'Documentation', parentPath);
+      }
+    } catch {
+      // ignore
+    }
+
     window.dispatchEvent(new CustomEvent('greendocs:cards-updated'));
   } catch (e) {
     console.error('Failed to save custom card', e);
