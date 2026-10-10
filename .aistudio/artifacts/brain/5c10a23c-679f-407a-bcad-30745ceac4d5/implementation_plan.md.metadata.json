@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan for wiring the File Tree Explorer tool directly to GitHub repository operations.\nCovers queuing and direct execution of create, update, reorder, and delete actions for pages and cards, updating the Deployments Portal to handle deletions and modifications, and eliminating browser-only storage dependency.",
-  "updatedAt":  "2026-10-10T17:35:04.668138114Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
