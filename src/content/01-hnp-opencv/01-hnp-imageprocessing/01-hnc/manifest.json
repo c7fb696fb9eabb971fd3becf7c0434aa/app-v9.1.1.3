@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "holderId": "01-hnc",
+  "description": "Standardized multi-format card bundle manifest linking markdown specs, audio narrations, PDF cheat sheets, and video tutorials.",
+  "cards": [
+    {
+      "id": "morphology-bundle-demo",
+      "title": "cv::morphologyEx Advanced Pipeline",
+      "tag": "Mathematical Morphology",
+      "order": 3,
+      "definition": "Structural mathematical morphology pipeline for discrete kernel erosion, dilation, gradient extraction, and top-hat filtering over structured structuring elements.",
+      "keyRule": "MORP_OPEN suppresses isolated foreground noise without altering overall object area geometry; MORP_CLOSE connects granular micro-voids.",
+      "deepDive": {
+        "typescriptInterface": "interface MorphologyBundle {\n  src: cv.Mat;\n  op: cv.MorphTypes;\n  kernel: cv.Mat;\n  iterations: number;\n  stream: 'sync' | 'cuda';\n}"
+      },
+      "media": {
+        "audioDuration": "01:48",
+        "audioTitle": "Morphology Operators Voice Narration",
+        "pdfTitle": "Morphology Architecture Cheat Sheet",
+        "videoTitle": "Structuring Elements Video Walkthrough",
+        "extendedNotes": "This card was bundled via manifest.json. Any media files (audio, pdf, video, image) placed in this folder are referenced here without file collisions."
+      }
+    }
+  ]
+}
