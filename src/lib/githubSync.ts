@@ -15,6 +15,20 @@ export interface CommitResult {
   error?: string;
 }
 
+export type DeploymentActionType = 'create' | 'update' | 'delete';
+
+export interface PendingDeployment {
+  id: string;
+  title: string;
+  targetPath: string;
+  actionType: DeploymentActionType;
+  filePath: string;
+  cardData?: ComponentCard;
+  contentPayload?: string;
+  submittedAt: string;
+}
+
+export const PENDING_DEPLOYMENTS_KEY = 'greendocs_pending_deployments_v1';
 const GITHUB_CONFIG_KEY = 'greendocs_github_config_v1';
 
 function getDefaultAuthToken(): string {
@@ -71,6 +85,40 @@ export function resetGitHubConfigToDefault(): GitHubConfig {
   };
   localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(def));
   return def;
+}
+
+// Queue Management Helpers
+export function getPendingDeployments(): PendingDeployment[] {
+  try {
+    const raw = localStorage.getItem(PENDING_DEPLOYMENTS_KEY);
+    if (raw) {
+      const items = JSON.parse(raw);
+      return items.map((it: any) => ({
+        ...it,
+        actionType: it.actionType || 'create',
+      }));
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+export function savePendingDeployments(items: PendingDeployment[]): void {
+  localStorage.setItem(PENDING_DEPLOYMENTS_KEY, JSON.stringify(items));
+  window.dispatchEvent(new CustomEvent('greendocs:deployments-updated'));
+}
+
+export function queueDeployment(item: PendingDeployment): void {
+  const current = getPendingDeployments();
+  // Remove duplicate items with identical ID or file path
+  const filtered = current.filter((i) => i.id !== item.id && i.filePath !== item.filePath);
+  savePendingDeployments([item, ...filtered]);
+}
+
+export function removePendingDeployment(id: string): void {
+  const current = getPendingDeployments();
+  savePendingDeployments(current.filter((i) => i.id !== id));
 }
 
 /**
@@ -181,7 +229,6 @@ export async function commitMarkdownToGitHub(
   const cleanPath = filePath.replace(/^\/+/, '');
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}`;
 
-  // GitHub supports "token <TOKEN>" for classic tokens and "Bearer <TOKEN>"
   const authHeaders = [`token ${token}`, `Bearer ${token}`];
 
   for (let attempt = 0; attempt < authHeaders.length; attempt++) {
@@ -198,7 +245,6 @@ export async function commitMarkdownToGitHub(
       });
 
       if (getRes.status === 401 && attempt === 0) {
-        // Try next auth header variant
         continue;
       }
 
@@ -227,7 +273,6 @@ export async function commitMarkdownToGitHub(
       });
 
       if (putRes.status === 401 && attempt === 0) {
-        // Try next auth header variant
         continue;
       }
 
@@ -271,6 +316,139 @@ export async function commitMarkdownToGitHub(
 }
 
 /**
+ * Deletes a file directly from GitHub repository via REST API.
+ */
+export async function deleteFileFromGitHub(
+  filePath: string,
+  commitMessage: string
+): Promise<CommitResult> {
+  const config = getGitHubConfig();
+  const token = (config.token || '').trim();
+  const owner = (config.owner || '').trim();
+  const repo = (config.repo || '').trim();
+  const branch = (config.branch || 'main').trim();
+
+  if (!token || !owner || !repo) {
+    return {
+      success: false,
+      filePath,
+      error: 'GitHub configuration or access token missing.',
+    };
+  }
+
+  const cleanPath = filePath.replace(/^\/+/, '');
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}`;
+  const authHeaders = [`token ${token}`, `Bearer ${token}`];
+
+  for (let attempt = 0; attempt < authHeaders.length; attempt++) {
+    const authHeader = authHeaders[attempt];
+    try {
+      // 1. Fetch file SHA
+      const getRes = await fetch(apiUrl, {
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/vnd.github+json',
+        },
+      });
+
+      if (getRes.status === 404) {
+        // File already deleted or does not exist
+        return { success: true, filePath: cleanPath };
+      }
+
+      if (getRes.status === 401 && attempt === 0) {
+        continue;
+      }
+
+      if (!getRes.ok) {
+        const errJson = await getRes.json().catch(() => ({}));
+        return {
+          success: false,
+          filePath: cleanPath,
+          error: errJson.message || `Failed to query file: HTTP ${getRes.status}`,
+        };
+      }
+
+      const fileData = await getRes.json();
+      const sha = fileData.sha;
+
+      // 2. Execute DELETE
+      const delRes = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: commitMessage,
+          sha,
+          branch,
+        }),
+      });
+
+      if (delRes.status === 401 && attempt === 0) {
+        continue;
+      }
+
+      if (!delRes.ok) {
+        const errJson = await delRes.json().catch(() => ({}));
+        return {
+          success: false,
+          filePath: cleanPath,
+          error: errJson.message || `Delete failed: HTTP ${delRes.status}`,
+        };
+      }
+
+      const resData = await delRes.json();
+      const commitSha = resData?.commit?.sha;
+      const commitUrl =
+        resData?.commit?.html_url ||
+        `https://github.com/${owner}/${repo}/commits/${branch}`;
+
+      return {
+        success: true,
+        commitSha,
+        commitUrl,
+        filePath: cleanPath,
+      };
+    } catch (err: any) {
+      if (attempt === authHeaders.length - 1) {
+        return {
+          success: false,
+          filePath: cleanPath,
+          error: err?.message || 'Network error deleting file on GitHub',
+        };
+      }
+    }
+  }
+
+  return {
+    success: false,
+    filePath: cleanPath,
+    error: 'Failed to authenticate with GitHub for file deletion.',
+  };
+}
+
+/**
+ * Executes a single pending deployment item (Create, Update, or Delete) on GitHub.
+ */
+export async function executeDeploymentItem(item: PendingDeployment): Promise<CommitResult> {
+  if (item.actionType === 'delete') {
+    return deleteFileFromGitHub(item.filePath, `docs(gui): delete "${item.title}" at ${item.filePath}`);
+  }
+
+  const content =
+    item.contentPayload || (item.cardData ? serializeCardToMarkdown(item.cardData) : '');
+  const commitMsg =
+    item.actionType === 'create'
+      ? `docs(gui): create "${item.title}" in ${item.targetPath}`
+      : `docs(gui): update "${item.title}" in ${item.targetPath}`;
+
+  return commitMarkdownToGitHub(item.filePath, content, commitMsg);
+}
+
+/**
  * Serializes a ComponentCard into a standard Markdown document with frontmatter.
  */
 export function serializeCardToMarkdown(card: ComponentCard): string {
@@ -308,6 +486,22 @@ ${card.keyRule || 'Ensure strict invariant safety.'}
 \`\`\`typescript
 ${card.deepDive?.typescriptInterface || 'interface ComponentConfig {\n  id: string;\n  status: "active";\n}'}
 \`\`\`
+`;
+}
+
+/**
+ * Generates an index markdown file for a page folder.
+ */
+export function serializePageToMarkdown(pageTitle: string, category = 'Documentation', order = 1): string {
+  return `---
+title: "${pageTitle.replace(/"/g, '\\"')}"
+category: "${category.replace(/"/g, '\\"')}"
+order: ${order}
+---
+
+# ${pageTitle}
+
+Documentation and interactive card deck module.
 `;
 }
 

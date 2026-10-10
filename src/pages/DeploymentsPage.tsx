@@ -1,31 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ComponentCard } from '../types';
-import { saveCustomCard } from '../lib/contentEngine';
+import { saveCustomCard, deleteCard } from '../lib/contentEngine';
 import {
   getGitHubConfig,
-  saveGitHubConfig,
   resetGitHubConfigToDefault,
-  commitMarkdownToGitHub,
-  serializeCardToMarkdown,
-  resolveRepositoryFilePath,
+  executeDeploymentItem,
   triggerGitHubPagesDeploy,
+  getPendingDeployments,
+  savePendingDeployments,
+  removePendingDeployment,
+  PendingDeployment,
   CommitResult,
 } from '../lib/githubSync';
 import { DeploymentsIcon } from '../components/studio/DeploymentsIcon';
 import { GitHubSettingsModal } from '../components/studio/GitHubSettingsModal';
 
-interface PendingDeployment {
-  id: string;
-  title: string;
-  targetPath: string;
-  cardData: ComponentCard;
-  submittedAt: string;
-}
-
 interface PublishedCommitLog {
   id: string;
   title: string;
+  actionType: string;
   targetPath: string;
   filePath: string;
   commitSha?: string;
@@ -33,7 +26,6 @@ interface PublishedCommitLog {
   timestamp: string;
 }
 
-const PENDING_DEPLOYMENTS_KEY = 'greendocs_pending_deployments_v1';
 const PUBLISHED_COMMITS_KEY = 'greendocs_published_commits_v1';
 
 export const DeploymentsPage: React.FC = () => {
@@ -41,13 +33,7 @@ export const DeploymentsPage: React.FC = () => {
   const ghConfig = getGitHubConfig();
 
   const [pendingDeployments, setPendingDeployments] = useState<PendingDeployment[]>(() => {
-    try {
-      const raw = localStorage.getItem(PENDING_DEPLOYMENTS_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {
-      // ignore
-    }
-    return [];
+    return getPendingDeployments();
   });
 
   const [publishedCommits, setPublishedCommits] = useState<PublishedCommitLog[]>(() => {
@@ -63,27 +49,25 @@ export const DeploymentsPage: React.FC = () => {
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishingAll, setPublishingAll] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isTriggeringWorkflow, setIsTriggeringWorkflow] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{
     type: 'success' | 'error' | 'info';
     text: string;
     commitUrl?: string;
   } | null>(null);
 
-  const handleResetToken = () => {
-    resetGitHubConfigToDefault();
-    setStatusMessage({
-      type: 'success',
-      text: 'GitHub credentials successfully reset to default verified token! You can now commit directly.',
-    });
-  };
+  // Sync with storage and window events
+  useEffect(() => {
+    savePendingDeployments(pendingDeployments);
+  }, [pendingDeployments]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(PENDING_DEPLOYMENTS_KEY, JSON.stringify(pendingDeployments));
-    } catch (e) {
-      // ignore
-    }
-  }, [pendingDeployments]);
+    const handleSync = () => {
+      setPendingDeployments(getPendingDeployments());
+    };
+    window.addEventListener('greendocs:deployments-updated', handleSync);
+    return () => window.removeEventListener('greendocs:deployments-updated', handleSync);
+  }, []);
 
   useEffect(() => {
     try {
@@ -93,54 +77,67 @@ export const DeploymentsPage: React.FC = () => {
     }
   }, [publishedCommits]);
 
-  // Execute Direct Push & Commit to GitHub for an individual card
+  const handleResetToken = () => {
+    resetGitHubConfigToDefault();
+    setStatusMessage({
+      type: 'success',
+      text: 'GitHub credentials successfully reset to default verified token! You can now commit directly.',
+    });
+  };
+
+  // Execute Direct Push / Delete on GitHub for an individual item
   const handlePublish = async (item: PendingDeployment): Promise<CommitResult> => {
     setPublishingId(item.id);
+    const actionLabel =
+      item.actionType === 'delete' ? 'Deleting' : item.actionType === 'update' ? 'Updating' : 'Creating';
+
     setStatusMessage({
       type: 'info',
-      text: `Committing "${item.title}" directly to GitHub repository (${ghConfig.owner}/${ghConfig.repo})...`,
+      text: `${actionLabel} "${item.title}" directly on GitHub repository (${ghConfig.owner}/${ghConfig.repo})...`,
     });
 
     try {
-      const filePath = resolveRepositoryFilePath(
-        item.targetPath,
-        item.title,
-        item.cardData.order || 1
-      );
-      const markdownContent = serializeCardToMarkdown(item.cardData);
-      const commitMessage = `docs(gui): publish "${item.title}" to ${item.targetPath}`;
-
-      const result = await commitMarkdownToGitHub(filePath, markdownContent, commitMessage);
+      const result = await executeDeploymentItem(item);
 
       if (result.success) {
-        // Also save to runtime store for instant client hydration
-        saveCustomCard(item.cardData, item.targetPath, '01-hnc');
+        // Sync local runtime state
+        if (item.actionType === 'delete' && item.cardData?.id) {
+          deleteCard(item.cardData.id);
+        } else if (item.cardData) {
+          saveCustomCard(item.cardData, item.targetPath, '01-hnc');
+        }
 
-        // Remove from pending review queue
-        const updatedPending = pendingDeployments.filter((d) => d.id !== item.id);
-        setPendingDeployments(updatedPending);
+        // Remove from pending queue
+        removePendingDeployment(item.id);
+        setPendingDeployments((prev) => prev.filter((d) => d.id !== item.id));
 
         // Record in published commits history
         const newLog: PublishedCommitLog = {
           id: item.id,
           title: item.title,
+          actionType: item.actionType,
           targetPath: item.targetPath,
-          filePath: result.filePath || filePath,
+          filePath: result.filePath || item.filePath,
           commitSha: result.commitSha,
           commitUrl: result.commitUrl,
           timestamp: new Date().toLocaleTimeString(),
         };
         setPublishedCommits((prev) => [newLog, ...prev.slice(0, 19)]);
 
+        const successText =
+          item.actionType === 'delete'
+            ? `Successfully removed "${item.title}" from GitHub repository!`
+            : `Successfully committed "${item.title}" to GitHub main!`;
+
         setStatusMessage({
           type: 'success',
-          text: `Successfully pushed & committed "${item.title}" to GitHub main!`,
+          text: successText,
           commitUrl: result.commitUrl,
         });
       } else {
         setStatusMessage({
           type: 'error',
-          text: `GitHub Commit Failed: ${result.error || 'Unknown error'}`,
+          text: `GitHub Operation Failed: ${result.error || 'Unknown error'}`,
         });
       }
 
@@ -156,7 +153,7 @@ export const DeploymentsPage: React.FC = () => {
     }
   };
 
-  // Publish all pending cards sequentially to GitHub
+  // Batch publish all pending items (creates, updates, and deletes) sequentially to GitHub
   const handlePublishAll = async () => {
     if (pendingDeployments.length === 0) return;
     setPublishingAll(true);
@@ -170,11 +167,9 @@ export const DeploymentsPage: React.FC = () => {
     setPublishingAll(false);
     setStatusMessage({
       type: 'success',
-      text: `Batch publish complete: ${successCount} of ${pendingDeployments.length} files committed to GitHub!`,
+      text: `Batch processing complete: ${successCount} of ${pendingDeployments.length} operations successfully pushed to GitHub!`,
     });
   };
-
-  const [isTriggeringWorkflow, setIsTriggeringWorkflow] = useState(false);
 
   const handleTriggerRebuild = async () => {
     setIsTriggeringWorkflow(true);
@@ -250,13 +245,13 @@ export const DeploymentsPage: React.FC = () => {
               : 'bg-cyan-950/40 border-cyan-500/40 text-cyan-300'
           }`}
         >
-          <div className="flex items-center gap-2.5">
-            <span className="text-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-sm shrink-0">
               {statusMessage.type === 'success' ? '✓' : statusMessage.type === 'error' ? '✕' : '⚡'}
             </span>
-            <span>{statusMessage.text}</span>
+            <span className="truncate">{statusMessage.text}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {statusMessage.type === 'error' && (
               <button
                 type="button"
@@ -300,7 +295,7 @@ export const DeploymentsPage: React.FC = () => {
                     disabled={publishingAll || publishingId !== null}
                     className="text-[11px] font-mono text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 px-3 py-1 rounded border border-emerald-500/40 transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {publishingAll ? 'Publishing All...' : '✓ Publish All to GitHub'}
+                    {publishingAll ? 'Processing All...' : `✓ Push All (${pendingDeployments.length}) to GitHub`}
                   </button>
                 )}
                 <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20">
@@ -313,41 +308,56 @@ export const DeploymentsPage: React.FC = () => {
               <div className="p-8 rounded-xl border border-white/[0.08] bg-[#0c121a]/40 text-center flex flex-col items-center justify-center gap-3">
                 <span className="text-2xl">✨</span>
                 <div className="text-xs font-mono text-slate-400">
-                  No cards pending deployment. Author new cards in Secret Studio to push them to GitHub.
+                  No files or operations pending review. Modify cards or tree hierarchy in Secret Studio to queue changes for GitHub.
                 </div>
                 <button
                   type="button"
                   onClick={() => navigate('/secret-studio')}
                   className="mt-2 px-4 py-2 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-semibold transition-all cursor-pointer"
                 >
-                  Go to Secret Studio Editor &rarr;
+                  Go to Secret Studio &amp; Tree Explorer &rarr;
                 </button>
               </div>
             ) : (
               <div className="flex flex-col gap-3 font-mono">
                 {pendingDeployments.map((item) => {
                   const isPublishingThis = publishingId === item.id;
-                  const targetFilePath = resolveRepositoryFilePath(
-                    item.targetPath,
-                    item.title,
-                    item.cardData.order || 1
-                  );
+                  const isDelete = item.actionType === 'delete';
+                  const isUpdate = item.actionType === 'update';
 
                   return (
                     <div
                       key={item.id}
-                      className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/10 flex flex-col gap-3 transition-all hover:border-amber-500/50"
+                      className={`p-4 rounded-xl border flex flex-col gap-3 transition-all ${
+                        isDelete
+                          ? 'border-rose-500/40 bg-rose-950/15 hover:border-rose-500/60'
+                          : isUpdate
+                          ? 'border-amber-500/40 bg-amber-950/15 hover:border-amber-500/60'
+                          : 'border-emerald-500/30 bg-emerald-950/10 hover:border-emerald-500/50'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              isDelete ? 'bg-rose-400' : isUpdate ? 'bg-amber-400' : 'bg-emerald-400'
+                            }`}
+                          ></span>
                           <span className="text-xs font-semibold text-white">{item.title}</span>
-                          <span className="text-[10px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.08]">
-                            {item.cardData.tag || 'Spec'}
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-bold ${
+                              isDelete
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                : isUpdate
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            }`}
+                          >
+                            {item.actionType}
                           </span>
                         </div>
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
-                          Ready to Commit
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {item.submittedAt}
                         </span>
                       </div>
 
@@ -356,17 +366,17 @@ export const DeploymentsPage: React.FC = () => {
                           Target Route: <span className="text-emerald-300 font-semibold">{item.targetPath}</span>
                         </div>
                         <div>
-                          Repository Destination:{' '}
-                          <code className="text-amber-200 text-[10px]">{targetFilePath}</code>
+                          Repository File:{' '}
+                          <code className="text-amber-200 text-[10px]">{item.filePath}</code>
                         </div>
-                        <div className="text-slate-500 text-[10px]">Submitted: {item.submittedAt}</div>
                       </div>
 
                       <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm(`Discard card "${item.title}" from deployment queue?`)) {
+                            if (window.confirm(`Discard "${item.title}" from deployment queue?`)) {
+                              removePendingDeployment(item.id);
                               setPendingDeployments((prev) => prev.filter((d) => d.id !== item.id));
                             }
                           }}
@@ -379,12 +389,26 @@ export const DeploymentsPage: React.FC = () => {
                           type="button"
                           disabled={isPublishingThis || publishingAll}
                           onClick={() => handlePublish(item)}
-                          className="px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs font-mono transition-colors cursor-pointer flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                          className={`px-4 py-2 rounded text-black font-semibold text-xs font-mono transition-colors cursor-pointer flex items-center gap-1.5 shadow-md disabled:opacity-50 ${
+                            isDelete
+                              ? 'bg-rose-500 hover:bg-rose-400 text-white'
+                              : isUpdate
+                              ? 'bg-amber-400 hover:bg-amber-300 text-black'
+                              : 'bg-emerald-500 hover:bg-emerald-400 text-black'
+                          }`}
                         >
                           {isPublishingThis ? (
                             <>
                               <span className="animate-spin text-sm">⏳</span>
-                              <span>Pushing to GitHub...</span>
+                              <span>Processing on GitHub...</span>
+                            </>
+                          ) : isDelete ? (
+                            <>
+                              <span>🗑️ Delete File on GitHub</span>
+                            </>
+                          ) : isUpdate ? (
+                            <>
+                              <span>⚡ Commit Update to GitHub</span>
                             </>
                           ) : (
                             <>
@@ -405,7 +429,7 @@ export const DeploymentsPage: React.FC = () => {
             <div className="rounded-xl border border-white/[0.08] bg-[#070a0e]/90 backdrop-blur-md p-5 flex flex-col gap-3 shadow-2xl">
               <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-mono text-xs">✓ Recent GitHub Production Commits</span>
+                  <span className="text-emerald-400 font-mono text-xs">✓ Recent GitHub Production Operations</span>
                 </div>
                 <button
                   type="button"
@@ -423,7 +447,12 @@ export const DeploymentsPage: React.FC = () => {
                     className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-950/10 flex items-center justify-between gap-3"
                   >
                     <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="text-white font-semibold truncate">{log.title}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-semibold truncate">{log.title}</span>
+                        <span className="text-[9px] uppercase px-1 rounded bg-white/[0.06] text-slate-400 border border-white/[0.08]">
+                          {log.actionType}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-slate-400 truncate">{log.filePath}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

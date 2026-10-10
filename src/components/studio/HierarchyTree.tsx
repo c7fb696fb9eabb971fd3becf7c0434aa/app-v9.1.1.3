@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageNode, ComponentCard } from '../../types';
 import {
   getContentRegistry,
@@ -9,6 +10,14 @@ import {
   deleteCard,
   reorderCard,
 } from '../../lib/contentEngine';
+import {
+  queueDeployment,
+  removePendingDeployment,
+  resolveRepositoryFilePath,
+  executeDeploymentItem,
+  serializePageToMarkdown,
+  PendingDeployment,
+} from '../../lib/githubSync';
 import {
   TreeFolderIcon,
   TreeChevronIcon,
@@ -32,7 +41,7 @@ interface HierarchyTreeProps {
   /** Callback when user selects a card to edit */
   onSelectCard: (card: ComponentCard, pagePath: string) => void;
   /** Callback when user clicks "+ Card" on a folder */
-  onCreateCardForFolder: (pagePath: string, pageTitle: string) => void;
+  onCreateCardForFolder: (pagePath: string, pageTitle: string, initialTitle?: string) => void;
   /** Callback when user clicks "+ New Page" */
   onCreateNewPage?: (parentPagePath?: string) => void;
   className?: string;
@@ -46,6 +55,7 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
   onCreateNewPage,
   className = '',
 }) => {
+  const navigate = useNavigate();
   const [tree, setTree] = useState<PageNode[]>(() => getContentRegistry());
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
@@ -75,6 +85,14 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
     onConfirm: () => {},
   });
 
+  // Action status toast with immediate direct push option
+  const [actionToast, setActionToast] = useState<{
+    text: string;
+    item?: PendingDeployment;
+    commitUrl?: string;
+    isProcessing?: boolean;
+  } | null>(null);
+
   // Reload tree on registry updates
   const refreshTree = () => {
     setTree(getContentRegistry());
@@ -91,6 +109,41 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
     setCollapsedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // Immediate push to GitHub handler
+  const handlePushItemImmediately = async (item: PendingDeployment) => {
+    setActionToast({
+      text: `Pushing "${item.title}" directly to GitHub repository...`,
+      item,
+      isProcessing: true,
+    });
+    try {
+      const res = await executeDeploymentItem(item);
+      if (res.success) {
+        removePendingDeployment(item.id);
+        setActionToast({
+          text: `Successfully executed "${item.title}" on GitHub main!`,
+          item,
+          commitUrl: res.commitUrl,
+          isProcessing: false,
+        });
+        window.dispatchEvent(new CustomEvent('greendocs:cards-updated'));
+        window.dispatchEvent(new CustomEvent('greendocs:deployments-updated'));
+      } else {
+        setActionToast({
+          text: `GitHub push failed: ${res.error || 'Check access token'}`,
+          item,
+          isProcessing: false,
+        });
+      }
+    } catch (err: any) {
+      setActionToast({
+        text: `Error pushing to GitHub: ${err?.message || 'Network exception'}`,
+        item,
+        isProcessing: false,
+      });
+    }
+  };
+
   const handleStartRename = (node: PageNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingPagePath(getNodePath(node));
@@ -99,24 +152,75 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
 
   const handleSaveRename = (urlPath: string) => {
     if (editingTitle.trim()) {
-      renamePage(urlPath, editingTitle.trim());
+      const newTitle = editingTitle.trim();
+      renamePage(urlPath, newTitle);
+      const cleanPath = urlPath.replace(/^\/home\/?/, '');
+      const filePath = `src/content/${cleanPath}/01-index.md`;
+      const depItem: PendingDeployment = {
+        id: `rename-${cleanPath.replace(/\//g, '-')}-${Date.now()}`,
+        title: `${newTitle} (Renamed)`,
+        targetPath: urlPath,
+        actionType: 'update',
+        filePath,
+        contentPayload: serializePageToMarkdown(newTitle),
+        submittedAt: 'Just now',
+      };
+      queueDeployment(depItem);
+      setActionToast({
+        text: `Page renamed to "${newTitle}" & queued in Deployments.`,
+        item: depItem,
+      });
     }
     setEditingPagePath(null);
   };
 
   const handleDeletePage = (node: PageNode, e: React.MouseEvent) => {
     e.stopPropagation();
+    const nodePath = getNodePath(node);
     const cardCount = node.cards?.length || 0;
-    const confirmMsg = cardCount > 0
-      ? `Delete page "${node.title}" and its ${cardCount} card(s)? This action cannot be undone.`
-      : `Delete page "${node.title}"?`;
+    const confirmMsg =
+      cardCount > 0
+        ? `Delete page "${node.title}" and queue its ${cardCount} card(s) for permanent deletion from GitHub?`
+        : `Delete page "${node.title}" and queue deletion of its files from GitHub?`;
 
     setConfirmModal({
       isOpen: true,
       title: `Delete Page: ${node.title}`,
       message: confirmMsg,
       onConfirm: () => {
-        deletePage(getNodePath(node));
+        deletePage(nodePath);
+
+        // Queue all child cards for GitHub deletion
+        (node.cards || []).forEach((c) => {
+          const filePath = resolveRepositoryFilePath(nodePath, c.title, c.order || 1);
+          queueDeployment({
+            id: `del-${c.id}-${Date.now()}`,
+            title: c.title,
+            targetPath: nodePath,
+            actionType: 'delete',
+            filePath,
+            cardData: c,
+            submittedAt: 'Just now',
+          });
+        });
+
+        // Also queue page index file for deletion
+        const cleanPath = nodePath.replace(/^\/home\/?/, '');
+        const pageItem: PendingDeployment = {
+          id: `del-page-${node.id}-${Date.now()}`,
+          title: node.title,
+          targetPath: nodePath,
+          actionType: 'delete',
+          filePath: `src/content/${cleanPath}/01-index.md`,
+          submittedAt: 'Just now',
+        };
+        queueDeployment(pageItem);
+
+        setActionToast({
+          text: `Page "${node.title}" & files queued for GitHub deletion.`,
+          item: pageItem,
+        });
+
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
       },
     });
@@ -125,21 +229,72 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
   const handleMovePage = (urlPath: string, direction: 'up' | 'down', e: React.MouseEvent) => {
     e.stopPropagation();
     reorderPage(urlPath, direction);
+    const cleanPath = urlPath.replace(/^\/home\/?/, '');
+    const depItem: PendingDeployment = {
+      id: `reorder-page-${cleanPath.replace(/\//g, '-')}-${Date.now()}`,
+      title: `Reordered Page (${cleanPath})`,
+      targetPath: urlPath,
+      actionType: 'update',
+      filePath: `src/content/${cleanPath}/01-index.md`,
+      contentPayload: serializePageToMarkdown(cleanPath),
+      submittedAt: 'Just now',
+    };
+    queueDeployment(depItem);
+    setActionToast({
+      text: `Page position updated & queued in Deployments.`,
+      item: depItem,
+    });
   };
 
-  const handleMoveCard = (cardId: string, pagePath: string, direction: 'up' | 'down', e: React.MouseEvent) => {
+  const handleMoveCard = (
+    card: ComponentCard,
+    pagePath: string,
+    direction: 'up' | 'down',
+    e: React.MouseEvent
+  ) => {
     e.stopPropagation();
-    reorderCard(cardId, pagePath, direction);
+    reorderCard(card.id, pagePath, direction);
+    const newOrder = direction === 'up' ? Math.max(1, (card.order || 1) - 1) : (card.order || 1) + 1;
+    const filePath = card.filePath || resolveRepositoryFilePath(pagePath, card.title, newOrder);
+    const depItem: PendingDeployment = {
+      id: `reorder-card-${card.id}-${Date.now()}`,
+      title: `${card.title} (Reordered)`,
+      targetPath: pagePath,
+      actionType: 'update',
+      filePath,
+      cardData: { ...card, order: newOrder },
+      submittedAt: 'Just now',
+    };
+    queueDeployment(depItem);
+    setActionToast({
+      text: `Card "${card.title}" order updated & queued in Deployments.`,
+      item: depItem,
+    });
   };
 
-  const handleDeleteCard = (cardId: string, cardTitle: string, e: React.MouseEvent) => {
+  const handleDeleteCard = (card: ComponentCard, pagePath: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const filePath = card.filePath || resolveRepositoryFilePath(pagePath, card.title, card.order || 1);
     setConfirmModal({
       isOpen: true,
-      title: `Delete Card: ${cardTitle}`,
-      message: `Are you sure you want to delete card "${cardTitle}"?`,
+      title: `Delete Card: ${card.title}`,
+      message: `Delete card "${card.title}" and queue file "${filePath}" for permanent removal from GitHub?`,
       onConfirm: () => {
-        deleteCard(cardId);
+        deleteCard(card.id);
+        const depItem: PendingDeployment = {
+          id: `del-card-${card.id}-${Date.now()}`,
+          title: card.title,
+          targetPath: pagePath,
+          actionType: 'delete',
+          filePath,
+          cardData: card,
+          submittedAt: 'Just now',
+        };
+        queueDeployment(depItem);
+        setActionToast({
+          text: `Card "${card.title}" queued for deletion from GitHub.`,
+          item: depItem,
+        });
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
       },
     });
@@ -154,7 +309,28 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
 
   const handleSaveSubPage = (parentUrlPath: string) => {
     if (subPageTitle.trim()) {
-      createDynamicPage(subPageTitle.trim(), 'Documentation', parentUrlPath);
+      const created = createDynamicPage(subPageTitle.trim(), 'Documentation', parentUrlPath);
+      const cleanPath = created.urlPath.replace(/^\/home\/?/, '');
+      const filePath = `src/content/${cleanPath}/01-index.md`;
+      const content = serializePageToMarkdown(
+        created.title,
+        created.category || 'Documentation',
+        created.order || 1
+      );
+      const depItem: PendingDeployment = {
+        id: `page-${created.slug}-${Date.now()}`,
+        title: created.title,
+        targetPath: created.urlPath,
+        actionType: 'create',
+        filePath,
+        contentPayload: content,
+        submittedAt: 'Just now',
+      };
+      queueDeployment(depItem);
+      setActionToast({
+        text: `Subpage "${created.title}" created & queued in Deployments.`,
+        item: depItem,
+      });
     }
     setAddingSubPageToPath(null);
     setSubPageTitle('');
@@ -168,9 +344,22 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
 
   const handleSaveCardForFolder = (nodePath: string, folderTitle: string) => {
     if (addingCardTitle.trim()) {
-      // Trigger creation without closing explorer
-      onCreateCardForFolder(nodePath, folderTitle);
-      // Pre-fill title in parent if needed or let user edit
+      const cTitle = addingCardTitle.trim();
+      onCreateCardForFolder(nodePath, folderTitle, cTitle);
+      const filePath = resolveRepositoryFilePath(nodePath, cTitle, 1);
+      const depItem: PendingDeployment = {
+        id: `card-${Date.now()}`,
+        title: cTitle,
+        targetPath: nodePath,
+        actionType: 'create',
+        filePath,
+        submittedAt: 'Just now',
+      };
+      queueDeployment(depItem);
+      setActionToast({
+        text: `Card "${cTitle}" initialized & queued in Deployments.`,
+        item: depItem,
+      });
     }
     setAddingCardToPath(null);
     setAddingCardTitle('');
@@ -378,11 +567,7 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
               value={addingCardTitle}
               onChange={(e) => setAddingCardTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && addingCardTitle.trim()) {
-                  onCreateCardForFolder(nodePath, node.title);
-                  setAddingCardToPath(null);
-                  setAddingCardTitle('');
-                }
+                if (e.key === 'Enter') handleSaveCardForFolder(nodePath, node.title);
                 if (e.key === 'Escape') setAddingCardToPath(null);
               }}
               autoFocus
@@ -390,13 +575,7 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
             />
             <button
               type="button"
-              onClick={() => {
-                if (addingCardTitle.trim()) {
-                  onCreateCardForFolder(nodePath, node.title);
-                  setAddingCardToPath(null);
-                  setAddingCardTitle('');
-                }
-              }}
+              onClick={() => handleSaveCardForFolder(nodePath, node.title)}
               className="px-2 h-6 text-[10px] font-mono rounded border border-emerald-500/40 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition-all cursor-pointer"
             >
               Create Card
@@ -517,7 +696,7 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
                   <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity shrink-0">
                     <button
                       type="button"
-                      onClick={(e) => handleMoveCard(card.id, nodePath, 'up', e)}
+                      onClick={(e) => handleMoveCard(card, nodePath, 'up', e)}
                       title="Move card up"
                       className="w-5 h-5 flex items-center justify-center rounded border border-white/[0.08] bg-[#070a0e]/90 hover:border-emerald-500/40 hover:bg-[#0c121a]/95 backdrop-blur-md text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm"
                     >
@@ -525,7 +704,7 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => handleMoveCard(card.id, nodePath, 'down', e)}
+                      onClick={(e) => handleMoveCard(card, nodePath, 'down', e)}
                       title="Move card down"
                       className="w-5 h-5 flex items-center justify-center rounded border border-white/[0.08] bg-[#070a0e]/90 hover:border-emerald-500/40 hover:bg-[#0c121a]/95 backdrop-blur-md text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm"
                     >
@@ -533,7 +712,7 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => handleDeleteCard(card.id, card.title, e)}
+                      onClick={(e) => handleDeleteCard(card, nodePath, e)}
                       title="Delete card"
                       className="w-5 h-5 flex items-center justify-center rounded border border-white/[0.08] bg-[#070a0e]/90 hover:border-rose-500/40 hover:bg-[#0c121a]/95 backdrop-blur-md text-slate-400 hover:text-rose-300 transition-all cursor-pointer shadow-sm"
                     >
@@ -663,6 +842,79 @@ export const HierarchyTree: React.FC<HierarchyTreeProps> = ({
           </div>
         )}
       </div>
+
+      {/* Floating Action Banner: Instant GitHub Push & Deployments Review */}
+      {actionToast && (
+        <div className="p-3 border-t border-emerald-500/40 bg-[#070a0e]/95 backdrop-blur-md flex flex-col gap-2 shrink-0 animate-fadeIn shadow-2xl">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  actionToast.isProcessing
+                    ? 'bg-amber-400 animate-ping'
+                    : actionToast.commitUrl
+                    ? 'bg-emerald-400'
+                    : 'bg-sky-400'
+                }`}
+              />
+              <span className="text-xs font-mono text-white truncate font-medium">
+                {actionToast.text}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActionToast(null)}
+              className="text-slate-400 hover:text-white text-xs p-1 cursor-pointer transition-colors"
+              title="Dismiss notification"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-white/[0.08]">
+            {actionToast.commitUrl ? (
+              <a
+                href={actionToast.commitUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-mono text-emerald-300 hover:text-emerald-200 underline flex items-center gap-1 font-semibold"
+              >
+                <span>✓ View Commit on GitHub</span>
+                <span>&rarr;</span>
+              </a>
+            ) : actionToast.item ? (
+              <button
+                type="button"
+                disabled={actionToast.isProcessing}
+                onClick={() => handlePushItemImmediately(actionToast.item!)}
+                className="px-3 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-mono font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-sm"
+              >
+                {actionToast.isProcessing ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    <span>Pushing to GitHub...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>⚡ Push to GitHub Now</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <button
+              type="button"
+              onClick={() => navigate('/deployments')}
+              className="px-3 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-200 hover:text-white text-[11px] font-mono flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+            >
+              <span>Review in Deployments</span>
+              <span>&rarr;</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tree Footer stats */}
       <div className="p-2 border-t border-white/[0.08] bg-[#070a0e]/90 backdrop-blur-md text-[10px] font-mono text-slate-400 flex items-center justify-between shrink-0">

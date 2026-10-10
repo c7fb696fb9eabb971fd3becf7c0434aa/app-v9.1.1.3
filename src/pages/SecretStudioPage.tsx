@@ -20,8 +20,10 @@ import { GitHubSettingsModal } from '../components/studio/GitHubSettingsModal';
 import {
   commitMarkdownToGitHub,
   serializeCardToMarkdown,
+  serializePageToMarkdown,
   resolveRepositoryFilePath,
   getGitHubConfig,
+  queueDeployment,
 } from '../lib/githubSync';
 
 export const SecretStudioPage: React.FC = () => {
@@ -105,9 +107,9 @@ export const SecretStudioPage: React.FC = () => {
   }, []);
 
   // When clicking "+ Create Card" or "+ Card" on a folder
-  const handleStartCreateCard = (folderPath?: string, folderTitle?: string) => {
+  const handleStartCreateCard = (folderPath?: string, folderTitle?: string, initialTitle?: string) => {
     setSelectedCardId(`card-${Date.now()}`);
-    setTitle('');
+    setTitle(initialTitle || '');
     setTag('General Spec');
     setOrder(1);
     setDefinition('');
@@ -323,57 +325,95 @@ export const SecretStudioPage: React.FC = () => {
     if (!title.trim()) return;
     const targetPath = selectedPagePath;
     const cardId = selectedCardId || `card-${Date.now()}`;
+    const filePath =
+      previewCard.filePath ||
+      resolveRepositoryFilePath(targetPath, title.trim(), Number(order) || 1);
 
     const cardToSave: ComponentCard = {
       ...previewCard,
       id: cardId,
       pagePath: targetPath,
+      filePath,
     };
 
     saveCustomCard(cardToSave, targetPath, '01-hnc');
 
-    const newDeploymentItem = {
+    queueDeployment({
       id: cardId,
       title: title.trim(),
       targetPath,
+      actionType: selectedCardId ? 'update' : 'create',
+      filePath,
       cardData: cardToSave,
       submittedAt: 'Just now',
-    };
-
-    try {
-      const raw = localStorage.getItem('greendocs_pending_deployments_v1');
-      const existing = raw ? JSON.parse(raw) : [];
-      const filtered = existing.filter((item: any) => item.id !== cardId);
-      localStorage.setItem('greendocs_pending_deployments_v1', JSON.stringify([newDeploymentItem, ...filtered]));
-    } catch (err) {
-      // ignore
-    }
+    });
 
     setGithubCommitStatus({
       type: 'info',
-      text: `Card queued in Deployments Portal. You can review and publish to GitHub from there.`,
+      text: `Card "${title.trim()}" queued in Deployments. You can review and publish to GitHub anytime.`,
     });
   };
 
   const handleDeleteCurrentCard = () => {
     if (!selectedCardId) return;
-    if (window.confirm(`Delete card "${title}"?`)) {
-      deleteCard(selectedCardId);
-      handleStartCreateCard(selectedPagePath, selectedPageTitle);
-    }
+    const cardTitle = title || 'Current Card';
+    const filePath =
+      previewCard.filePath ||
+      resolveRepositoryFilePath(selectedPagePath, cardTitle, Number(order) || 1);
+
+    deleteCard(selectedCardId);
+
+    queueDeployment({
+      id: `del-card-${selectedCardId}-${Date.now()}`,
+      title: cardTitle,
+      targetPath: selectedPagePath,
+      actionType: 'delete',
+      filePath,
+      cardData: previewCard,
+      submittedAt: 'Just now',
+    });
+
+    setGithubCommitStatus({
+      type: 'info',
+      text: `Card "${cardTitle}" removed locally & queued for GitHub deletion in Deployments.`,
+    });
+    handleStartCreateCard(selectedPagePath, selectedPageTitle);
   };
 
   const handleCreateNewPageModalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPageInputTitle.trim()) return;
 
-    const created = createDynamicPage(newPageInputTitle.trim(), newPageCategory, newPageParentPath);
+    const pageTitle = newPageInputTitle.trim();
+    const created = createDynamicPage(pageTitle, newPageCategory, newPageParentPath);
     setShowNewPageModal(false);
     setNewPageInputTitle('');
 
     // Auto-select the newly created page
     setSelectedPagePath(created.urlPath);
     setSelectedPageTitle(created.title);
+
+    // Queue new page in Deployments
+    const cleanPath = created.urlPath.replace(/^\/home\/?/, '');
+    const filePath = `src/content/${cleanPath}/01-index.md`;
+    queueDeployment({
+      id: `page-${created.slug}-${Date.now()}`,
+      title: created.title,
+      targetPath: created.urlPath,
+      actionType: 'create',
+      filePath,
+      contentPayload: serializePageToMarkdown(
+        created.title,
+        created.category || 'Documentation',
+        created.order || 1
+      ),
+      submittedAt: 'Just now',
+    });
+
+    setGithubCommitStatus({
+      type: 'info',
+      text: `Page "${created.title}" created & queued in Deployments for GitHub push.`,
+    });
   };
 
   return (

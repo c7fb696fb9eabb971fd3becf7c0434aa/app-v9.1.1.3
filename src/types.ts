@@ -50,6 +50,8 @@ export interface ComponentCard {
   holderId?: string;
   /** Parent page path e.g. /home/opencv/imageprocessing */
   pagePath?: string;
+  /** GitHub repository file path e.g. src/content/... */
+  filePath?: string;
 }
 
 /**

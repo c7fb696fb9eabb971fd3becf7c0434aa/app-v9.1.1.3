@@ -474,6 +474,8 @@ function buildTreeFromFileSystem(): PageNode[] {
       );
       if (card) {
         card.folderOrder = isInsideCardFolder ? folderOrder : 1;
+        card.filePath = fullPath.replace(/^\//, '');
+        card.pagePath = `/home/${targetNode.slugSegments.join('/')}`;
         const holder = getOrCreateCardHolder(isInsideCardFolder ? lastEffectiveFolder : '01-hnc', folderOrder);
         holder.cards.push(card);
         targetNode.cards.push(card);
@@ -494,6 +496,8 @@ function buildTreeFromFileSystem(): PageNode[] {
       );
       if (card) {
         card.folderOrder = folderOrder;
+        card.filePath = fullPath.replace(/^\//, '');
+        card.pagePath = `/home/${targetNode.slugSegments.join('/')}`;
         const holder = getOrCreateCardHolder(lastEffectiveFolder, folderOrder);
         holder.cards.push(card);
         targetNode.cards.push(card);
