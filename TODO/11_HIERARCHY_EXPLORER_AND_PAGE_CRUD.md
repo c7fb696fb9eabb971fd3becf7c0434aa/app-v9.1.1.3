@@ -11,6 +11,7 @@ Build the Studio tree over Git-backed IDs and provide create/edit/rename/move/re
 
 - Load repository tree through API with current commit SHA and loading/error/empty states.
 - Implement search, expand/collapse, page selection, create page/sub-page, title/slug edit, sibling order, parent move, and delete confirmation.
+- Keep hierarchy management in the destination selector/explorer dialog; the default card-authoring surface must reserve its main columns for the editor and live preview as specified in TODO 17.
 - Maintain stable IDs; enforce slug uniqueness and prevent cycles/moving a node into its descendant.
 - Edit in a draft; show dirty/validated/stale states; do not write directly when clicking tree controls.
 - Show affected descendants/assets for deletes and provide change summary before publish.

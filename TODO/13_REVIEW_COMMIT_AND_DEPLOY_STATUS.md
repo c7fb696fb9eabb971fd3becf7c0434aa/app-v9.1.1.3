@@ -13,6 +13,7 @@ Make publishing intentional, atomic, observable, and recoverable.
 - Show target repository/branch and current/base commit; require explicit Publish confirmation.
 - Send the complete batch through the GitHub Git Database API; preserve the draft on any failure.
 - Return commit SHA/URL and track the exact Actions workflow run for that SHA.
+- Route `Queue in Deployments` to deployment status without committing; route `Commit & Push to GitHub` through the explicit reviewed publish flow.
 - Distinguish committed, CI validation failed, build failed, deployment pending, deployed, and deployment unknown.
 - Provide reload/reconcile paths; expected-head protection prevents a retry from overwriting a concurrent commit.
 

@@ -32,6 +32,7 @@ export interface PageDraft {
 export interface CardDraft {
   id: string;
   pageId: string;
+  sequenceOrder: number;
   title: string;
   tag: string;
   definition: string;
@@ -65,10 +66,12 @@ export function createPageDraft(parentId: string): PageDraft {
   };
 }
 
-export function createCardDraft(pageId: string): CardDraft {
+export function createCardDraft(pageId: string, cards: readonly CardRecord[] = []): CardDraft {
+  const pageCards = cards.filter((card) => card.pageId === pageId);
   return {
     id: crypto.randomUUID(),
     pageId,
+    sequenceOrder: pageCards.length ? Math.max(...pageCards.map((card) => card.order)) + 2 : 1,
     title: '',
     tag: '',
     definition: '',
@@ -101,16 +104,14 @@ export function pageRecordFromDraft(draft: PageDraft, pages: readonly PageRecord
 
 export function cardRecordFromDraft(draft: CardDraft, cards: readonly CardRecord[]): CardRecord {
   const existing = cards.find((card) => card.id === draft.id);
-  const siblings = cards.filter((card) => card.pageId === draft.pageId && card.id !== draft.id);
   return {
     schemaVersion: 1,
     id: draft.id,
     pageId: draft.pageId,
     order:
-      existing?.order ??
-      (siblings.length
-        ? Math.min(Math.max(...siblings.map((card) => card.order)) + 10, CONTENT_LIMITS.orderValue)
-        : 0),
+      existing && draft.sequenceOrder === existing.order + 1
+        ? existing.order
+        : Math.max(0, Math.min(draft.sequenceOrder - 1, CONTENT_LIMITS.orderValue)),
     title: draft.title.trim(),
     ...(draft.tag.trim() ? { tag: draft.tag.trim() } : {}),
     definition: draft.definition.trim(),

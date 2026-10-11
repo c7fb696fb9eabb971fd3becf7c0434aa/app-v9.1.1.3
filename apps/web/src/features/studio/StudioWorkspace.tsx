@@ -68,6 +68,7 @@ function asCardDraft(card: CardRecord): CardDraft {
   return {
     id: card.id,
     pageId: card.pageId,
+    sequenceOrder: card.order + 1,
     title: card.title,
     tag: card.tag ?? '',
     definition: card.definition,
@@ -347,6 +348,9 @@ export function StudioWorkspace() {
   const [cardForm, setCardForm] = useState<CardDraft | null>(null);
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [audioReferenceUrl, setAudioReferenceUrl] = useState('');
+  const [pdfReferenceUrl, setPdfReferenceUrl] = useState('');
+  const [videoReferenceUrl, setVideoReferenceUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -380,14 +384,14 @@ export function StudioWorkspace() {
       setPages(snapshot.pages);
       setCards(snapshot.cards);
       setAssetMutations([]);
-      setSelectedPageId((current) =>
-        current && snapshot.pages.some((page) => page.id === current)
-          ? current
-          : (snapshot.pages[0]?.id ?? null),
-      );
-      setSelectedCardId(null);
+      const initialCard = snapshot.cards[0] ?? null;
+      const initialPageId = initialCard?.pageId ?? snapshot.pages[0]?.id ?? '';
+      setSelectedPageId(initialPageId || null);
+      setSelectedCardId(initialCard?.id ?? null);
       setPageForm(null);
-      setCardForm(null);
+      setCardForm(
+        initialCard ? asCardDraft(initialCard) : createCardDraft(initialPageId, snapshot.cards),
+      );
       setNotice(null);
     } catch (cause) {
       setError(friendlyError(cause));
@@ -419,20 +423,58 @@ export function StudioWorkspace() {
     [assetMutations, baseSnapshot, cards, pages],
   );
 
+  function pageFormIsDirty(): boolean {
+    if (!pageForm) return false;
+    const existing = pages.find((page) => page.id === pageForm.id);
+    if (existing) {
+      return JSON.stringify(pageRecordFromDraft(pageForm, pages)) !== JSON.stringify(existing);
+    }
+    return !!(pageForm.title.trim() || pageForm.slug.trim() || pageForm.description.trim());
+  }
+
+  function cardFormIsDirty(): boolean {
+    if (!cardForm) return false;
+    const existing = cards.find((card) => card.id === cardForm.id);
+    if (existing) {
+      return JSON.stringify(cardRecordFromDraft(cardForm, cards)) !== JSON.stringify(existing);
+    }
+    return !!(
+      cardForm.title.trim() ||
+      cardForm.tag.trim() ||
+      cardForm.sequenceOrder !== 1 ||
+      cardForm.definition.trim() ||
+      cardForm.keyRule.trim() ||
+      cardForm.code.trim() ||
+      cardForm.spec.trim() ||
+      cardForm.attachments.length
+    );
+  }
+
   function editorIsClosed(): boolean {
-    if (pageForm || cardForm) {
+    if (pageFormIsDirty() || cardFormIsDirty()) {
       setError('Save or cancel the open editor before switching to another record.');
       return false;
     }
     return true;
   }
 
-  function choosePage(page: PageRecord) {
-    if (!editorIsClosed()) return;
+  function choosePage(page: PageRecord, preserveCardDraft = false) {
+    if (!preserveCardDraft && !editorIsClosed()) return;
     setSelectedPageId(page.id);
     setSelectedCardId(null);
     setPageForm(null);
-    setCardForm(null);
+    if (preserveCardDraft) {
+      const nextOrder =
+        Math.max(-1, ...cards.filter((card) => card.pageId === page.id).map((card) => card.order)) +
+        2;
+      setCardForm((current) =>
+        current
+          ? { ...current, pageId: page.id, sequenceOrder: nextOrder }
+          : createCardDraft(page.id, cards),
+      );
+    } else {
+      setCardForm(null);
+    }
   }
 
   function chooseCard(card: CardRecord) {
@@ -506,6 +548,7 @@ export function StudioWorkspace() {
     });
     setSelectedPageId(record.id);
     setPageForm(null);
+    setCardForm(createCardDraft(record.id, cards));
     setError(null);
     setNotice(`Page "${record.title}" is saved in this draft. It is not published yet.`);
   }
@@ -515,7 +558,7 @@ export function StudioWorkspace() {
     if (!selectedPageId) return;
     setSelectedCardId(null);
     setPageForm(null);
-    setCardForm(createCardDraft(selectedPageId));
+    setCardForm(createCardDraft(selectedPageId, cards));
   }
 
   function editCard(card: CardRecord) {
@@ -538,6 +581,14 @@ export function StudioWorkspace() {
       setError('Choose an existing page for the card.');
       return;
     }
+    if (!Number.isSafeInteger(cardForm.sequenceOrder) || cardForm.sequenceOrder < 1) {
+      setError('Card sequence order must be a positive whole number.');
+      return;
+    }
+    if (cardForm.sequenceOrder > CONTENT_LIMITS.orderValue + 1) {
+      setError(`Card sequence order must not exceed ${CONTENT_LIMITS.orderValue + 1}.`);
+      return;
+    }
     if (!record.title || !record.definition) {
       setError('Card title and definition are required.');
       return;
@@ -548,8 +599,11 @@ export function StudioWorkspace() {
       return current.map((card) => (card.id === record.id ? record : card));
     });
     setSelectedPageId(record.pageId);
-    setSelectedCardId(record.id);
-    setCardForm(null);
+    const wasExisting = baseSnapshot?.cards.some((card) => card.id === record.id) ?? false;
+    setSelectedCardId(wasExisting ? record.id : null);
+    setCardForm(
+      wasExisting ? asCardDraft(record) : createCardDraft(record.pageId, [...cards, record]),
+    );
     setError(null);
     setNotice(`Card "${record.title}" is saved in this draft. It is not published yet.`);
   }
@@ -614,6 +668,11 @@ export function StudioWorkspace() {
         orderById.has(item.id) ? { ...item, order: orderById.get(item.id)! } : item,
       ),
     );
+    setCardForm((current) =>
+      current && orderById.has(current.id)
+        ? { ...current, sequenceOrder: orderById.get(current.id)! + 1 }
+        : current,
+    );
   }
 
   function moveAttachment(index: number, direction: -1 | 1) {
@@ -656,7 +715,44 @@ export function StudioWorkspace() {
     }));
   }
 
-  async function addAssetFile(file: File | undefined) {
+  function addExternalLink(label: string, value: string, clear: () => void) {
+    if (!cardForm) return;
+    if (cardForm.attachments.length >= CONTENT_LIMITS.attachmentsPerCard) {
+      setError(`Cards can have at most ${CONTENT_LIMITS.attachmentsPerCard} attachments.`);
+      return;
+    }
+    if (!label.trim() || !value.trim()) {
+      setError('Enter a label and URL before adding an external reference.');
+      return;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      setError('Enter a valid http or https URL.');
+      return;
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      setError('External links must use http or https.');
+      return;
+    }
+    updateCardForm((current) => ({
+      ...current,
+      attachments: [
+        ...current.attachments,
+        {
+          id: crypto.randomUUID(),
+          kind: 'link',
+          label: label.trim().slice(0, CONTENT_LIMITS.attachmentLabelCharacters),
+          url: parsed.href,
+        },
+      ],
+    }));
+    clear();
+    setError(null);
+  }
+
+  async function addAssetFile(file: File | undefined, expectedKind?: StoredAttachment['kind']) {
     if (!file || !cardForm) return;
     if (cardForm.attachments.length >= CONTENT_LIMITS.attachmentsPerCard) {
       setError(`Cards can have at most ${CONTENT_LIMITS.attachmentsPerCard} attachments.`);
@@ -665,6 +761,10 @@ export function StudioWorkspace() {
     const attachmentInfo = attachmentType(file.type);
     if (!attachmentInfo) {
       setError('Choose a supported image, audio, video, or PDF file.');
+      return;
+    }
+    if (expectedKind && attachmentInfo.kind !== expectedKind) {
+      setError(`Choose a supported ${expectedKind} file.`);
       return;
     }
     if (file.size <= 0 || file.size > CONTENT_LIMITS.assetBytes) {
@@ -752,10 +852,14 @@ export function StudioWorkspace() {
         setPages(fresh.pages);
         setCards(fresh.cards);
         setAssetMutations([]);
-        setSelectedPageId(fresh.pages[0]?.id ?? null);
-        setSelectedCardId(null);
+        const initialCard = fresh.cards[0] ?? null;
+        const initialPageId = initialCard?.pageId ?? fresh.pages[0]?.id ?? '';
+        setSelectedPageId(initialPageId || null);
+        setSelectedCardId(initialCard?.id ?? null);
         setPageForm(null);
-        setCardForm(null);
+        setCardForm(
+          initialCard ? asCardDraft(initialCard) : createCardDraft(initialPageId, fresh.cards),
+        );
         setNotice(
           `Repository reloaded at commit ${fresh.sourceCommit}. Deployment is not yet confirmed.`,
         );
@@ -772,7 +876,7 @@ export function StudioWorkspace() {
   }
 
   function openReview() {
-    if (pageForm || cardForm) {
+    if (pageFormIsDirty() || cardFormIsDirty()) {
       setError('Save or cancel the open editor before reviewing repository changes.');
       return;
     }
@@ -988,7 +1092,7 @@ export function StudioWorkspace() {
             selectedId={selectedPageId}
             selectedCardId={selectedCardId}
             onSelect={(page) => {
-              choosePage(page);
+              choosePage(page, true);
               setHierarchyOpen(false);
             }}
             onEdit={(page) => {
@@ -1265,106 +1369,244 @@ export function StudioWorkspace() {
                   </Button>
                 </div>
                 <div className="studio-card-editor-fields">
-                  <TextInput
-                    id="card-title"
-                    label="Card title"
-                    maxLength={160}
-                    required
-                    value={cardForm.title}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, title: event.target.value }))
-                    }
-                  />
-                  <TextInput
-                    id="card-tag"
-                    label="Tag"
-                    maxLength={80}
-                    value={cardForm.tag}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, tag: event.target.value }))
-                    }
-                  />
-                  <label className="field-label" htmlFor="card-page">
-                    Page
-                  </label>
-                  <select
-                    id="card-page"
-                    className="text-field"
-                    value={cardForm.pageId}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, pageId: event.target.value }))
-                    }
+                  <section
+                    className="studio-editor-section"
+                    aria-labelledby="card-destination-title"
                   >
-                    {pages.map((page) => (
-                      <option value={page.id} key={page.id}>
-                        {page.title}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="field-label" htmlFor="card-definition">
-                    Definition
-                  </label>
-                  <textarea
-                    id="card-definition"
-                    className="text-field studio-textarea"
-                    maxLength={10000}
-                    required
-                    value={cardForm.definition}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, definition: event.target.value }))
-                    }
-                  />
-                  <label className="field-label" htmlFor="card-key-rule">
-                    Key rule
-                  </label>
-                  <textarea
-                    id="card-key-rule"
-                    className="text-field studio-textarea"
-                    maxLength={5000}
-                    value={cardForm.keyRule}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, keyRule: event.target.value }))
-                    }
-                  />
-                  <label className="field-label" htmlFor="card-code">
-                    Code
-                  </label>
-                  <textarea
-                    id="card-code"
-                    className="text-field studio-textarea"
-                    maxLength={20000}
-                    value={cardForm.code}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, code: event.target.value }))
-                    }
-                  />
-                  <label className="field-label" htmlFor="card-spec">
-                    Specification
-                  </label>
-                  <textarea
-                    id="card-spec"
-                    className="text-field studio-textarea"
-                    maxLength={20000}
-                    value={cardForm.spec}
-                    onChange={(event) =>
-                      updateCardForm((current) => ({ ...current, spec: event.target.value }))
-                    }
-                  />
-                  <fieldset className="studio-attachments">
-                    <legend>Attachments</legend>
-                    <label className="field-label" htmlFor="attachment-file">
-                      Upload image, audio, video, or PDF (10 MiB max)
+                    <h3 id="card-destination-title">1. Destination page / folder</h3>
+                    <div className="studio-destination-select">
+                      <p>
+                        {pages.find((page) => page.id === cardForm.pageId)?.title ??
+                          'Select a destination page'}
+                        {pages.find((page) => page.id === cardForm.pageId)?.slug
+                          ? ` (/${pages.find((page) => page.id === cardForm.pageId)?.slug})`
+                          : ''}
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setPageSearch('');
+                          setHierarchyOpen(true);
+                        }}
+                      >
+                        Select
+                      </Button>
+                    </div>
+                  </section>
+                  <section className="studio-editor-section" aria-labelledby="card-metadata-title">
+                    <h3 id="card-metadata-title">2. Card identity &amp; metadata</h3>
+                    <div className="studio-card-meta-grid">
+                      <TextInput
+                        id="card-title"
+                        label="Card title"
+                        maxLength={160}
+                        required
+                        value={cardForm.title}
+                        onChange={(event) =>
+                          updateCardForm((current) => ({ ...current, title: event.target.value }))
+                        }
+                      />
+                      <TextInput
+                        id="card-tag"
+                        label="Tag / Badge"
+                        maxLength={80}
+                        value={cardForm.tag}
+                        onChange={(event) =>
+                          updateCardForm((current) => ({ ...current, tag: event.target.value }))
+                        }
+                      />
+                      <TextInput
+                        id="card-sequence-order"
+                        label="Sequence order #"
+                        type="number"
+                        min={1}
+                        max={CONTENT_LIMITS.orderValue + 1}
+                        step={1}
+                        required
+                        value={cardForm.sequenceOrder}
+                        onChange={(event) =>
+                          updateCardForm((current) => ({
+                            ...current,
+                            sequenceOrder: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </section>
+                  <section className="studio-editor-section" aria-labelledby="card-content-title">
+                    <h3 id="card-content-title">3. Card content &amp; specification</h3>
+                    <label className="field-label" htmlFor="card-definition">
+                      Definition / Overview
                     </label>
-                    <input
-                      id="attachment-file"
-                      className="text-field"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/ogg,audio/wav,video/mp4,video/webm,application/pdf"
-                      onChange={(event) => {
-                        void addAssetFile(event.target.files?.[0]);
-                        event.currentTarget.value = '';
-                      }}
+                    <textarea
+                      id="card-definition"
+                      className="text-field studio-textarea"
+                      maxLength={10000}
+                      required
+                      value={cardForm.definition}
+                      onChange={(event) =>
+                        updateCardForm((current) => ({
+                          ...current,
+                          definition: event.target.value,
+                        }))
+                      }
                     />
+                    <label className="field-label" htmlFor="card-key-rule">
+                      Execution Rule / Invariant
+                    </label>
+                    <textarea
+                      id="card-key-rule"
+                      className="text-field studio-textarea"
+                      maxLength={5000}
+                      value={cardForm.keyRule}
+                      onChange={(event) =>
+                        updateCardForm((current) => ({ ...current, keyRule: event.target.value }))
+                      }
+                    />
+                    <label className="field-label" htmlFor="card-code">
+                      Code sample
+                    </label>
+                    <textarea
+                      id="card-code"
+                      className="text-field studio-textarea"
+                      maxLength={20000}
+                      value={cardForm.code}
+                      onChange={(event) =>
+                        updateCardForm((current) => ({ ...current, code: event.target.value }))
+                      }
+                    />
+                    <label className="field-label" htmlFor="card-spec">
+                      TypeScript Interface Spec
+                    </label>
+                    <textarea
+                      id="card-spec"
+                      className="text-field studio-textarea"
+                      maxLength={20000}
+                      value={cardForm.spec}
+                      onChange={(event) =>
+                        updateCardForm((current) => ({ ...current, spec: event.target.value }))
+                      }
+                    />
+                  </section>
+                  <fieldset className="studio-attachments">
+                    <legend>4. Multi-format media attachments</legend>
+                    <div className="studio-media-grid">
+                      <section className="studio-media-card">
+                        <h4>Audio file</h4>
+                        <label className="field-label" htmlFor="attachment-audio-file">
+                          Upload MP3 / audio
+                        </label>
+                        <input
+                          id="attachment-audio-file"
+                          className="text-field"
+                          type="file"
+                          accept="audio/mpeg,audio/ogg,audio/wav"
+                          onChange={(event) => {
+                            void addAssetFile(event.target.files?.[0], 'audio');
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                        <TextInput
+                          id="attachment-audio-url"
+                          label="Audio reference URL"
+                          type="url"
+                          value={audioReferenceUrl}
+                          onChange={(event) => setAudioReferenceUrl(event.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            addExternalLink('Audio reference', audioReferenceUrl, () =>
+                              setAudioReferenceUrl(''),
+                            )
+                          }
+                        >
+                          Add audio URL
+                        </Button>
+                      </section>
+                      <section className="studio-media-card">
+                        <h4>PDF reference</h4>
+                        <label className="field-label" htmlFor="attachment-pdf-file">
+                          Upload PDF document
+                        </label>
+                        <input
+                          id="attachment-pdf-file"
+                          className="text-field"
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(event) => {
+                            void addAssetFile(event.target.files?.[0], 'pdf');
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                        <TextInput
+                          id="attachment-pdf-url"
+                          label="PDF reference URL"
+                          type="url"
+                          value={pdfReferenceUrl}
+                          onChange={(event) => setPdfReferenceUrl(event.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            addExternalLink('PDF reference', pdfReferenceUrl, () =>
+                              setPdfReferenceUrl(''),
+                            )
+                          }
+                        >
+                          Add PDF URL
+                        </Button>
+                      </section>
+                      <section className="studio-media-card">
+                        <h4>Walkthrough video</h4>
+                        <label className="field-label" htmlFor="attachment-video-file">
+                          Upload MP4 / video
+                        </label>
+                        <input
+                          id="attachment-video-file"
+                          className="text-field"
+                          type="file"
+                          accept="video/mp4,video/webm"
+                          onChange={(event) => {
+                            void addAssetFile(event.target.files?.[0], 'video');
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                        <TextInput
+                          id="attachment-video-url"
+                          label="Video reference URL"
+                          type="url"
+                          value={videoReferenceUrl}
+                          onChange={(event) => setVideoReferenceUrl(event.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            addExternalLink('Walkthrough video', videoReferenceUrl, () =>
+                              setVideoReferenceUrl(''),
+                            )
+                          }
+                        >
+                          Add video URL
+                        </Button>
+                      </section>
+                      <section className="studio-media-card">
+                        <h4>Image asset</h4>
+                        <label className="field-label" htmlFor="attachment-image-file">
+                          Upload image
+                        </label>
+                        <input
+                          id="attachment-image-file"
+                          className="text-field"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(event) => {
+                            void addAssetFile(event.target.files?.[0], 'image');
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                      </section>
+                    </div>
                     <div className="studio-link-fields">
                       <TextInput
                         id="attachment-link-label"
@@ -1381,44 +1623,12 @@ export function StudioWorkspace() {
                       />
                       <Button
                         type="button"
-                        onClick={() => {
-                          if (cardForm.attachments.length >= CONTENT_LIMITS.attachmentsPerCard) {
-                            setError(
-                              `Cards can have at most ${CONTENT_LIMITS.attachmentsPerCard} attachments.`,
-                            );
-                            return;
-                          }
-                          if (!linkLabel.trim() || !linkUrl.trim()) {
-                            setError('Enter both a label and URL before adding an external link.');
-                            return;
-                          }
-                          let parsed: URL;
-                          try {
-                            parsed = new URL(linkUrl);
-                          } catch {
-                            setError('Enter a valid http or https URL.');
-                            return;
-                          }
-                          if (!['http:', 'https:'].includes(parsed.protocol)) {
-                            setError('External links must use http or https.');
-                            return;
-                          }
-                          updateCardForm((current) => ({
-                            ...current,
-                            attachments: [
-                              ...current.attachments,
-                              {
-                                id: crypto.randomUUID(),
-                                kind: 'link',
-                                label: linkLabel.trim().slice(0, 160),
-                                url: parsed.href,
-                              },
-                            ],
-                          }));
-                          setLinkLabel('');
-                          setLinkUrl('');
-                          setError(null);
-                        }}
+                        onClick={() =>
+                          addExternalLink(linkLabel, linkUrl, () => {
+                            setLinkLabel('');
+                            setLinkUrl('');
+                          })
+                        }
                       >
                         Add link
                       </Button>
@@ -1464,7 +1674,10 @@ export function StudioWorkspace() {
                   </fieldset>
                 </div>
                 <section className="studio-preview" aria-label="Card draft preview">
-                  <h3>Live preview</h3>
+                  <header className="studio-preview-heading">
+                    <h3>Live preview</h3>
+                    <span className="studio-preview-live">Real-time sync</span>
+                  </header>
                   <h4>{cardForm.title || 'Untitled card'}</h4>
                   {cardForm.tag && <span className="studio-tag">{cardForm.tag}</span>}
                   <p>{cardForm.definition || 'Definition preview'}</p>
@@ -1493,9 +1706,27 @@ export function StudioWorkspace() {
                     </ul>
                   )}
                 </section>
-                <Button type="submit" variant="primary">
-                  Save card draft
-                </Button>
+                <div className="studio-compose-actions">
+                  <Button type="submit">Save card draft</Button>
+                  <Link className="action-button action-button-secondary" to="/studio/deployments">
+                    Queue in Deployments
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={openReview}
+                    disabled={
+                      !request ||
+                      loading ||
+                      saving ||
+                      draftIssues.length > 0 ||
+                      cardFormIsDirty() ||
+                      pageFormIsDirty()
+                    }
+                  >
+                    Commit &amp; Push to GitHub
+                  </Button>
+                </div>
               </form>
             ) : selectedPage ? (
               <>
