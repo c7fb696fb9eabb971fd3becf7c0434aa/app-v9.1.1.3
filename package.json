@@ -11,7 +11,7 @@
     "dev:web": "corepack pnpm@12.11.2 --filter @greendocs/web dev",
     "dev:api": "corepack pnpm@12.11.2 --filter @greendocs/api dev",
     "build": "corepack pnpm@12.11.2 -r --if-present build",
-    "typecheck": "corepack pnpm@12.11.2 -r --if-present typecheck",
+    "typecheck": "corepack pnpm@12.11.2 --filter @greendocs/content-schema build && corepack pnpm@12.11.2 -r --if-present typecheck",
     "test": "node --test scripts/check-module-boundaries.test.mjs scripts/check-secrets.test.mjs && corepack pnpm@12.11.2 -r --if-present test",
     "lint": "node scripts/check-module-boundaries.mjs && node scripts/check-secrets.mjs && oxlint apps packages scripts",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json,html}\" \"packages/**/*.{ts,tsx,js,json}\" \"scripts/**/*.mjs\" \".github/**/*.{yml,yaml,json}\" \".vscode/**/*.json\" package.json pnpm-workspace.yaml tsconfig.base.json .prettierrc.json --ignore-unknown"
