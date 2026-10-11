@@ -4,8 +4,8 @@
 
 Keep these project values together and in this order:
 
-1. **GitHub OAuth client ID:** `[Enter only if an approved OAuth flow is introduced; the current app uses PAT sign-in.]`
-2. **GitHub classic PAT:** `[Do not put the token in this file. Enter it directly into the app's GitHub sign-in form when needed.]`
+1. **GitHub OAuth client ID:** `[Ov23lia5n28LWDlbVJLZ]`
+2. **GitHub classic PAT:** `[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]`
 3. **Exact Git remote/repository:** `https://github.com/c7fb696fb9eabb971fd3becf7c0434aa/app-v9.1.1.3.git`
 4. **Exact public web app URL:** `https://c7fb696fb9eabb971fd3becf7c0434aa.github.io/app-v9.1.1.3/`
 
