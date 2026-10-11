@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+minimumReleaseAgeExclude:
+  - lucide-react@1.55.0
+  - prettier@3.9.10

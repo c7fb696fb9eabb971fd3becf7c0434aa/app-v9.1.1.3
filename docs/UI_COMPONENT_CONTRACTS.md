@@ -1,0 +1,42 @@
+# UI Component Contracts
+
+These contracts keep presentation separate from draft ownership and Git persistence. Components may invoke a typed feature callback, but only the API/repository feature owns committed writes. The Studio workspace now implements the page tree, page/card draft forms, attachment preview, and publish review against the authenticated repository API.
+
+## Shared primitives
+
+| Component          | Owner and API                                                                                | State and behavior                                             | Render/accessibility                                                                           | Persistence and verification                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Button`           | Design primitives; `variant`, `type`, `disabled`, children, `onClick`                        | Parent-controlled; disabled prevents activation                | Native button, visible focus, disabled cursor/state; high-impact actions keep text             | No persistence. Test keyboard activation and disabled behavior.                                    |
+| `IconButton`       | Design primitives; required `IconName`, visible action `label`, `disabled`, `onClick`        | Parent-controlled                                              | Native button with `aria-label`, catalog icon hidden from assistive tech, focus ring           | No persistence. Test name, focus, callback, and disabled state.                                    |
+| `TextInput`        | Design primitives; `id`, label, value, `onChange`, type, error                               | Controlled; parent clears sensitive values after submission    | Associated visible label; error via `aria-describedby` and alert/status semantics              | No persistence. Test labels, validation, and controlled updates.                                   |
+| `Dialog`           | Design primitives; title, children, close callback                                           | Parent owns open/closed state; Escape and close action dismiss | Dialog role, labelled title, initial focus, focus containment and restoration                  | No persistence. Test Escape, focus movement/restoration, and keyboard controls.                    |
+| `NavigationDrawer` | Navigation feature; user identity, open state, login/logout callbacks, login-intent callback | Parent controls auth; drawer owns only temporary open state    | Right-side modal dialog, Escape, focus containment/restoration, backdrop close; no Studio link | Logout calls the auth feature; no other persistence. Test signed-out/in states and focus behavior. |
+| `StatusIndicator`  | Shared status primitive; finite status enum, optional non-sensitive detail                   | Controlled by feature state                                    | Status/live region with text and icon; never color-only                                        | No persistence. Test all finite states and accessible text.                                        |
+| `RoutePageShell`   | App route; route ID and page content                                                         | Route-local loading/error state                                | Main landmark and route-specific error boundary; stable Suspense status                        | No persistence. Test each route failure independently.                                             |
+
+## Studio feature contracts
+
+| Component          | Owner and API                                                                           | State and behavior                                                                                     | Render/accessibility                                                        | Persistence and verification                                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `NavigationRow`    | Studio hierarchy; page identity, depth, selected/expanded state, callbacks              | Selection and expansion are feature-owned; row does not mutate records                                 | Nested tree items, search, expand/collapse, explicit action names           | Draft state only; no direct writes. Live keyboard/screen-reader acceptance remains open.                                |
+| `PageTreeNode`     | Studio hierarchy; page record, children, selected/expanded state                        | Tree derives from repository snapshot plus in-memory draft; parent moves reject self/descendant cycles | Nested tree semantics, loading/error/empty states, responsive layout        | Supports create/edit/move/reorder/delete; remote conflict and round-trip need staging verification.                     |
+| `CardEditor`       | Studio cards; controlled title, tag, definition, rule, code/spec, page, and attachments | Controlled form draft; source commit belongs to workspace state                                        | Named labels, validation, card preview, focusable actions                   | Memory-only until publish. Live round-trip remains unverified.                                                          |
+| `AttachmentPicker` | Studio assets; typed upload and external-link fields                                    | Validates MIME, 10 MiB maximum, HTTP(S) links, and 20 attachments/card using shared content policy    | File/link inputs; remove/reorder actions and actionable errors              | Asset mutations join the same publish batch; real media upload/playback remains unverified.                             |
+| `CardPreview`      | Studio cards; immutable draft or repository record                                      | Derived from card state                                                                                | Renders images, audio/video controls, PDFs, and external links              | Staged bytes use memory-only data URLs; committed assets use the fixed repository's raw-content URL.                    |
+| `PublishPanel`     | Studio workspace; base snapshot, mutation summary, message, API state                   | Feature owns review state; one explicit submit; stable idempotency key for unchanged retry             | Repository/branch/base SHA, mutation list, keyboard-accessible confirmation | Sends one atomic API batch. Deployment status is not yet available; real commit/retry/conflict acceptance remains open. |
+
+## State ownership
+
+- URL: navigable public and Studio location; Studio is a direct route, not global navigation.
+- Auth feature: verified identity and opaque session in volatile memory only; expiry/logout clears both.
+- Feature state: unsaved page/card/media draft and base commit SHA, memory-only.
+- API/Git: committed records, content history, and authoritative branch head.
+- Components: controlled inputs and temporary presentation state only; no direct GitHub calls, browser storage, or hidden persistence.
+
+## Current verification
+
+- Icon registry tests cover action-to-icon keys, icon accessibility, focus, click, and disabled-state API behavior.
+- Route tests cover public access, drawer isolation, signed-out Studio redirect, and lazy login rendering.
+- API tests cover volatile session issuance, repository permission checks, expiry/revocation, no-store response headers, and idempotent replay behavior.
+- The Studio feature typechecks, passes lint/module-boundary and secret scans, and is included in successful web/API/workspace production builds.
+- Real authenticated browser acceptance has not been run: the local API fails closed with `auth_provider_not_configured`, and no Studio CRUD operation has been represented as a live GitHub test.

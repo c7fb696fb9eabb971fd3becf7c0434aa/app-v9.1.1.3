@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "GreenDocs Web (Chrome)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173/",
+      "webRoot": "${workspaceFolder}/apps/web/src",
+      "preLaunchTask": "GreenDocs: Web dev server"
+    },
+    {
+      "name": "GreenDocs API (attach)",
+      "type": "node",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": 9229,
+      "restart": true,
+      "preLaunchTask": "GreenDocs: API debug server",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "GreenDocs Full Stack",
+      "configurations": ["GreenDocs Web (Chrome)", "GreenDocs API (attach)"]
+    }
+  ]
+}

@@ -8,15 +8,18 @@
 - Local API URL: reserve `http://localhost:8787` for development; production API URL is a public non-secret setting injected into the web build.
 - GitHub PAT: enter interactively in the app/API sign-in flow. Do not put it in this report, Git remote URL, PowerShell history, `.env` files, or command arguments.
 
-## Current Reset-State Facts
+## Current Repository Facts (2026-10-10)
 
-git remote -v
-git ls-remote origin HEAD
-At reset time the workspace had no `.git` metadata. It now has a new local Git repository with an empty `main` and the exact `origin` above. `git ls-remote origin HEAD` succeeded; the production branch was `4e7f74cb4ea629e9168c816b4dda9ad73d2e6526` at the last check. The GitHub CLI is unavailable.
+- The exact `origin` is configured, and local `main` tracks `origin/main`.
+- Read-only `git ls-remote origin HEAD refs/heads/main` reported `85874a42bff26c464ac3cb6d5fcd220cd2392fc2` for both refs.
+- Public GitHub metadata confirms the exact owner/repository, `main` as default branch, Pages enabled, and the canonical homepage. Anonymous branch-protection lookup returned HTTP 401; Pages settings were not returned by the API.
+- The canonical live Pages URL still serves the old legacy bundle. Its OAuth callback fabricates `github-developer` and persists `greenapp_user` to browser `localStorage`; do not use this live UI for authentication or PAT entry. The current local scaffold deliberately rejects fake auth.
+- `git push -u origin main` completed with `Everything up-to-date`. It transferred no commits, so it is not evidence that a new ref update was authorized.
+- The scaffold and TODO tree currently have local modifications/untracked files and have not been committed or pushed. Local Git author name/email are unset.
+- The `gh` and `gcloud` CLIs are unavailable. GitHub Pages settings, branch protection, Cloud Run, Firestore/KMS, and staging access have not been verified from this environment.
+- A historical disposable-ref dry-run is retained below as historical evidence only; it does not replace current staging verification.
 
-A disposable local commit succeeded. Its first push dry-run was denied because the previously cached GitHub account lacked write access. After browser reauthentication, a second test commit (`da2faf0`) passed `git push --dry-run` to `test/github-write-dry-run`; that branch was removed and no remote ref changed. No PAT is stored in the repository or report. The local `main` is intentionally empty/uncommitted until the confirmed docs-only replacement is committed as a normal child of the fetched remote `main`.
-
-The reports-only replacement removes the existing Pages workflow along with the old app. The currently published deployment may remain online, but future commits will not rebuild or publish until the new app's workflow is added.
+The local scaffold includes `.github/workflows/ci.yml` for verification and `.github/workflows/deploy-pages.yml` to build/deploy the web application to GitHub Pages on `main`. The Pages workflow does not deploy the API or provision authentication infrastructure. Hosted CI/deployment must be verified after the changes are pushed; repository Pages settings and the required `VITE_API_BASE_URL` Actions variable have not been independently confirmed.
 
 ## Safe Commit/Push Smoke Test
 

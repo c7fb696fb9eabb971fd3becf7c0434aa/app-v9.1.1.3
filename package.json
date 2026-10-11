@@ -1,0 +1,26 @@
+{
+  "name": "greendocs-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "dev": "corepack pnpm@12.11.2 --parallel --filter @greendocs/web --filter @greendocs/api dev",
+    "dev:web": "corepack pnpm@12.11.2 --filter @greendocs/web dev",
+    "dev:api": "corepack pnpm@12.11.2 --filter @greendocs/api dev",
+    "build": "corepack pnpm@12.11.2 -r --if-present build",
+    "typecheck": "corepack pnpm@12.11.2 -r --if-present typecheck",
+    "test": "node --test scripts/check-module-boundaries.test.mjs scripts/check-secrets.test.mjs && corepack pnpm@12.11.2 -r --if-present test",
+    "lint": "node scripts/check-module-boundaries.mjs && node scripts/check-secrets.mjs && oxlint apps packages scripts",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json,html}\" \"packages/**/*.{ts,tsx,js,json}\" \"scripts/**/*.mjs\" \".github/**/*.{yml,yaml,json}\" \".vscode/**/*.json\" package.json pnpm-workspace.yaml tsconfig.base.json .prettierrc.json --ignore-unknown"
+  },
+  "devDependencies": {
+    "@babel/parser": "8.0.7",
+    "oxlint": "1.87.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "typescript": "7.0.2"
+  }
+}

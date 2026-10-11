@@ -10,6 +10,7 @@ Verified on 2026-10-10 against official release pages and npm's `latest` dist-ta
 | Vite | 8.3.4 | npm `vite/latest`; requires Node `^20.19.0 || >=22.12.0`, satisfied by Node 24 LTS. |
 | pnpm | 12.11.2 | npm `pnpm/latest`; pin through the root `packageManager` field. |
 | Tailwind CSS | 4.3.3 | npm `tailwindcss/latest`; use the v4 CSS-first configuration and supported Vite integration. |
+| Oxc lint | 1.87.0 | TypeScript 7-compatible linter selected for the scaffold; `typescript-eslint` 8.71.1 currently requires TypeScript `<6.1.0`. |
 
 ## Sources
 

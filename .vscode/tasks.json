@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "GreenDocs: Web dev server",
+      "type": "shell",
+      "command": "corepack pnpm@12.11.2 --filter @greendocs/web dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": ".*", "message": 1 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*VITE v",
+          "endsPattern": "Local:\\s+http://localhost:5173/"
+        }
+      }
+    },
+    {
+      "label": "GreenDocs: API debug server",
+      "type": "shell",
+      "command": "corepack pnpm@12.11.2 --filter @greendocs/api dev:debug",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": ".*", "message": 1 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Debugger listening on",
+          "endsPattern": "GreenDocs API listening on .*"
+        }
+      }
+    },
+    {
+      "label": "GreenDocs: dev servers",
+      "type": "shell",
+      "command": "corepack pnpm@12.11.2 dev",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "GreenDocs: test",
+      "type": "shell",
+      "command": "corepack pnpm@12.11.2 test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "GreenDocs: typecheck",
+      "type": "shell",
+      "command": "corepack pnpm@12.11.2 typecheck",
+      "problemMatcher": []
+    },
+    {
+      "label": "GreenDocs: build",
+      "type": "shell",
+      "command": "corepack pnpm@12.11.2 build",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
