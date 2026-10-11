@@ -6,12 +6,15 @@
 2. The browser sends it directly over HTTPS to `api.github.com/user` and the fixed repository metadata endpoint.
 3. The app displays GitHub's actual login/account ID and proceeds only if the repository response grants push permission.
 4. The credential remains in a closure-backed memory reference. Sign-out, GitHub 401, or closing the tab clears access. Reload requires sign-in again.
+5. Successful sign-in always redirects to `/#/home`; if an authenticated user visits `/#/`, the app redirects them back to `/home`.
 
 ## 2. Read and Render
 
-- Studio reads the configured GitHub branch ref, commit/tree, and page/card blobs.
+- `/home` reads the configured GitHub branch ref, commit/tree, and page/card blobs, then renders pages, sub-pages, and cards.
+- Studio reads the same repository snapshot for editing.
 - Content records are validated with the shared schema; assets and hierarchy are resolved from stable IDs and explicit relationships.
 - A source commit SHA identifies the snapshot used for editing.
+- Studio is a protected direct URL that developers enter manually; no public or authenticated navigation links to it.
 
 ## 3. Edit and Publish
 

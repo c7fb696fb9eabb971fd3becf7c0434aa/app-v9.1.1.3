@@ -7,9 +7,9 @@
 
 - GitHub is the only identity provider and runtime data service.
 - GitHub Pages is static hosting; no external API, database, secret store, or cloud runtime is permitted.
-- Studio sign-in accepts a PAT, verifies the real user at GitHub `/user`, and checks write permission for the fixed repository.
+- GitHub sign-in accepts a PAT, verifies the real user at GitHub `/user`, and checks write permission for the fixed repository before granting access to `/home` or Studio.
 - The PAT is held only in tab memory, never browser persistence, URL, logs, telemetry, build variables, or source.
-- Studio is not linked in the public drawer. Direct access while signed out returns to public home; route hiding is UX, not authorization.
+- Studio is not linked anywhere in navigation. Direct access while signed out returns to `/`; route hiding is UX, not authorization.
 
 ## Threats and Controls
 

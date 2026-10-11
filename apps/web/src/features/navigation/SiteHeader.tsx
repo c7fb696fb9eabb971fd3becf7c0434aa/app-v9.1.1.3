@@ -40,7 +40,11 @@ export function SiteHeader({ onLoginIntent }: { onLoginIntent: () => void }) {
     <>
       <header className="site-header">
         <div className="header-leading" />
-        <Link className="header-home" to={APP_ROUTES.home} aria-label="GreenDocs home">
+        <Link
+          className="header-home"
+          to={user ? APP_ROUTES.home : APP_ROUTES.publicHome}
+          aria-label="GreenDocs home"
+        >
           <span className="brand-mark">
             <Icon name="brand" />
           </span>

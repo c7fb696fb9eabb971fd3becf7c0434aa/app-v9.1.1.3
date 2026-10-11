@@ -9,24 +9,24 @@ Make Secret Studio a separate, directly addressable application route without ex
 
 ## Work
 
-- Select and document a stable hash route (candidate `#/studio`) and return-path behavior.
+- Use the stable hash route `#/studio`; do not preserve an unauthorized requested route through login.
 - Do not render Secret Studio links, labels, or actions in the right drawer/global navigation.
-- Load Studio only when the user directly visits the route or follows an explicit authenticated deep link.
-- Enforce verified server session and repository authorization on the route and every API operation. Route secrecy is not a security control.
+- Load Studio only when a developer manually visits the route.
+- Enforce verified GitHub memory authentication and repository authorization on the route and each GitHub operation. Route secrecy is not a security control.
 - Isolate Studio layout/state/error boundaries and avoid global shell state leaking into the editor.
-- Ensure the public page/nav can render without loading Studio chunks or requesting private Studio data.
+- Ensure `/` and `/home` render without loading Studio chunks; `/home` loads only its own GitHub read snapshot.
 
 ## Done When
 
 - Right sidebar has only public navigation/auth actions and no Studio entry.
-- Direct `#/studio` while signed out redirects to PAT login; after verified auth it returns to Studio.
+- Direct `#/studio` while signed out redirects to public `/`; sign-in always goes to `/home`. An authenticated developer must enter `#/studio` manually.
 - Direct `#/studio` for a valid GitHub user without repo write access remains blocked.
-- Public home and public content continue to work when Studio code/API is unavailable.
+- Public landing and authenticated documentation home continue to work when the Studio chunk is unavailable.
 
 ## Verification
 
-Browser E2E asserts no Studio link in drawer, direct route behavior, signed-out/unauthorized guard, deep link return, and independent route error/loading boundaries.
+Browser E2E asserts no Studio link anywhere, manual direct-route behavior, signed-out/unauthorized guard, login always redirecting to `/home`, and independent route error/loading boundaries.
 
-**Local evidence:** The Studio route is direct-only, lazy-loaded, guarded by in-memory verified-session state, and has an independent route boundary. The drawer omits Studio, and login return paths are restricted to Studio paths. Synthetic route tests cover drawer isolation and signed-out/authorized navigation; web tests pass.
+**Local evidence:** Studio is a manually addressed, lazy-loaded route guarded by in-memory verified auth. Tests cover signed-out Studio redirect, no visible Studio link, login-to-`/home`, authenticated root redirect, and route-specific boundaries.
 
-**Not verified:** Live repository authorization and browser network traces require provisioned API/cloud infrastructure; the full cross-browser E2E matrix remains outstanding.
+**Not verified:** Full cross-browser E2E remains outstanding. Live sign-in and fixed-repository reads succeeded on the deployed GitHub-only implementation.

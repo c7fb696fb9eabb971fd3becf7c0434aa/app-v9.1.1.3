@@ -1,6 +1,6 @@
 # UI Component Contracts
 
-These contracts keep presentation separate from draft ownership and Git persistence. Components may invoke a typed feature callback, but only the API/repository feature owns committed writes. The Studio workspace now implements the page tree, page/card draft forms, attachment preview, and publish review against the authenticated repository API.
+These contracts keep presentation separate from draft ownership and Git persistence. The GitHub repository feature owns committed writes. The app has a public landing route, an authenticated documentation home that displays repository content, and a manually addressed protected Studio route.
 
 ## Shared primitives
 
@@ -14,29 +14,36 @@ These contracts keep presentation separate from draft ownership and Git persiste
 | `StatusIndicator`  | Shared status primitive; finite status enum, optional non-sensitive detail                   | Controlled by feature state                                    | Status/live region with text and icon; never color-only                                        | No persistence. Test all finite states and accessible text.                                        |
 | `RoutePageShell`   | App route; route ID and page content                                                         | Route-local loading/error state                                | Main landmark and route-specific error boundary; stable Suspense status                        | No persistence. Test each route failure independently.                                             |
 
+## Route flow and documentation home
+
+- Signed-out `/#/` is the public landing page; successful sign-in always redirects to `/#/home`.
+- `/home` reads the validated repository snapshot and renders every page, nested sub-page, and card in repository order, including its supported attachments.
+- While authenticated, visiting `/` redirects back to `/home`. The header's home control also points to `/home`.
+- `/#/studio` is protected and intentionally has no visible link from any route. A developer must enter it manually.
+- Signed-out visits to `/home` or `/studio` return to `/`.
+
 ## Studio feature contracts
 
-| Component          | Owner and API                                                                           | State and behavior                                                                                     | Render/accessibility                                                        | Persistence and verification                                                                                            |
-| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `NavigationRow`    | Studio hierarchy; page identity, depth, selected/expanded state, callbacks              | Selection and expansion are feature-owned; row does not mutate records                                 | Nested tree items, search, expand/collapse, explicit action names           | Draft state only; no direct writes. Live keyboard/screen-reader acceptance remains open.                                |
-| `PageTreeNode`     | Studio hierarchy; page record, children, selected/expanded state                        | Tree derives from repository snapshot plus in-memory draft; parent moves reject self/descendant cycles | Nested tree semantics, loading/error/empty states, responsive layout        | Supports create/edit/move/reorder/delete; remote conflict and round-trip need staging verification.                     |
-| `CardEditor`       | Studio cards; controlled title, tag, definition, rule, code/spec, page, and attachments | Controlled form draft; source commit belongs to workspace state                                        | Named labels, validation, card preview, focusable actions                   | Memory-only until publish. Live round-trip remains unverified.                                                          |
-| `AttachmentPicker` | Studio assets; typed upload and external-link fields                                    | Validates MIME, 10 MiB maximum, HTTP(S) links, and 20 attachments/card using shared content policy    | File/link inputs; remove/reorder actions and actionable errors              | Asset mutations join the same publish batch; real media upload/playback remains unverified.                             |
-| `CardPreview`      | Studio cards; immutable draft or repository record                                      | Derived from card state                                                                                | Renders images, audio/video controls, PDFs, and external links              | Staged bytes use memory-only data URLs; committed assets use the fixed repository's raw-content URL.                    |
-| `PublishPanel`     | Studio workspace; base snapshot, mutation summary, message, GitHub operation state       | Feature owns review state; one explicit submit; retains draft on failure                              | Repository/branch/base SHA, mutation list, keyboard-accessible confirmation | Creates one non-force Git commit against the expected branch head. Deployment status is not yet available; real commit/retry/conflict acceptance remains open. |
+| Component          | Owner and API                                                                           | State and behavior                                                                                     | Render/accessibility                                                        | Persistence and verification                                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NavigationRow`    | Studio hierarchy; page identity, depth, selected/expanded state, callbacks              | Selection and expansion are feature-owned; row does not mutate records                                 | Nested tree items, search, expand/collapse, explicit action names           | Draft state only; no direct writes. Live keyboard/screen-reader acceptance remains open.                                                                       |
+| `PageTreeNode`     | Studio hierarchy; page record, children, selected/expanded state                        | Tree derives from repository snapshot plus in-memory draft; parent moves reject self/descendant cycles | Nested tree semantics, loading/error/empty states, responsive layout        | Supports create/edit/move/reorder/delete; remote conflict and round-trip need staging verification.                                                            |
+| `CardEditor`       | Studio cards; controlled title, tag, definition, rule, code/spec, page, and attachments | Controlled form draft; source commit belongs to workspace state                                        | Named labels, validation, card preview, focusable actions                   | Memory-only until publish. Live round-trip remains unverified.                                                                                                 |
+| `AttachmentPicker` | Studio assets; typed upload and external-link fields                                    | Validates MIME, 10 MiB maximum, HTTP(S) links, and 20 attachments/card using shared content policy     | File/link inputs; remove/reorder actions and actionable errors              | Asset mutations join the same publish batch; real media upload/playback remains unverified.                                                                    |
+| `CardPreview`      | Studio cards; immutable draft or repository record                                      | Derived from card state                                                                                | Renders images, audio/video controls, PDFs, and external links              | Staged bytes use memory-only data URLs; committed assets use the fixed repository's raw-content URL.                                                           |
+| `PublishPanel`     | Studio workspace; base snapshot, mutation summary, message, GitHub operation state      | Feature owns review state; one explicit submit; retains draft on failure                               | Repository/branch/base SHA, mutation list, keyboard-accessible confirmation | Creates one non-force Git commit against the expected branch head. Deployment status is not yet available; real commit/retry/conflict acceptance remains open. |
 
 ## State ownership
 
-- URL: navigable public and Studio location; Studio is a direct route, not global navigation.
-- Auth feature: verified identity and opaque session in volatile memory only; expiry/logout clears both.
+- URL: `/` is public before sign-in; `/home` is protected documentation; `/studio` is manual protected entry, not global navigation.
+- Auth feature: verified identity and PAT in volatile memory only; sign-out/revocation clears both.
 - Feature state: unsaved page/card/media draft and base commit SHA, memory-only.
-- API/Git: committed records, content history, and authoritative branch head.
+- GitHub/Git: committed records, content history, and authoritative branch head.
 - Components: controlled inputs and temporary presentation state only; no direct GitHub calls, browser storage, or hidden persistence.
 
 ## Current verification
 
 - Icon registry tests cover action-to-icon keys, icon accessibility, focus, click, and disabled-state API behavior.
-- Route tests cover public access, drawer isolation, signed-out Studio redirect, and lazy login rendering.
-- API tests cover volatile session issuance, repository permission checks, expiry/revocation, no-store response headers, and idempotent replay behavior.
-- The Studio feature typechecks, passes lint/module-boundary and secret scans, and is included in successful web/API/workspace production builds.
+- Route tests cover public access, login-to-home flow, repository page/sub-page/card rendering, drawer isolation, signed-out protected redirects, and refusal to stay on public root while authenticated.
+- Direct GitHub auth/repository behavior is unit-tested; live sign-in and repository reads succeeded at deployment SHA `fd723119b31d882314515ef10c9dcc45d8d320fc`. Live draft page/card operations were exercised; no publish commit was made. lint/module-boundary and secret scans, and is included in successful web/API/workspace production builds.
 - Real authenticated browser acceptance has not yet been run against the direct GitHub implementation. The former deployment had no API and could not authenticate; that API dependency has been removed.

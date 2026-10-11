@@ -15,9 +15,14 @@ GreenDocs is a GitHub-only documentation site and editor:
 
 ## User Journey
 
-Open the public Pages URL -> choose GitHub sign-in in the navigation -> enter a PAT -> the SPA verifies the actual GitHub user and push permission on the fixed repository -> navigate to the direct Studio route -> edit pages, sub-pages, cards, and attachments in memory -> review changes -> explicitly commit to GitHub -> observe the commit and Actions/Pages result.
+1. `/#/` is the public landing page. A signed-in user is redirected away from it and cannot navigate back to it while authenticated.
+2. Sign in with GitHub. The SPA verifies the real identity and push permission for the fixed repository.
+3. Successful sign-in always navigates to `/#/home`.
+4. `/#/home` reads and displays repository pages, nested sub-pages, and cards. It is protected and is not a route to Studio.
+5. Studio is at `/#/studio` and is intentionally absent from all visible navigation. Only a developer who knows the route enters it manually.
+6. In Studio, edit records in memory, review the batch, then explicitly commit. Observe the commit and matching Actions/Pages result separately.
 
-Unauthenticated direct Studio access returns to public home. The Studio route is not linked in the public drawer. The page explains that a browser-held PAT is exposed to any script executing in the page while signed in.
+Signed-out access to `/home` or `/studio` returns to the public landing page. Signing out also returns to `/`. The sign-in page explains that a browser-held PAT is exposed to any script executing while authenticated.
 
 ## Requirements and Invariants
 

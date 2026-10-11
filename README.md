@@ -29,3 +29,12 @@ The browser verifies the user by calling GitHub's `/user` API with the PAT, chec
 ## Deployment
 
 Pushes to `main` run CI and deploy `apps/web` to GitHub Pages through `.github/workflows/deploy-pages.yml`. There is no separate API service, Cloud project, external database, or API-origin setting.
+
+## Route Flow
+
+- `/#/` is the public landing page before sign-in.
+- Successful GitHub sign-in always redirects to `/#/home`.
+- `/#/home` displays the repository's pages, nested sub-pages, and cards.
+- Authenticated users visiting `/` are redirected to `/home`; the header home control also points to `/home`.
+- `/#/studio` is a protected developer-only route. It is intentionally not linked in the landing page, documentation home, header, or drawer; developers enter it manually.
+- Signed-out visits to `/home` or `/studio` return to `/`.

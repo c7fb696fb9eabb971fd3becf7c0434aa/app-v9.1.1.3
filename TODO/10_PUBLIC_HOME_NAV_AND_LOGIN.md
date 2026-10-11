@@ -5,27 +5,34 @@
 
 ## Goal
 
-Implement the requested public-home -> right drawer -> login -> verified session journey. Secret Studio is entered by direct URL, not by a right-drawer link.
+Implement `/` public landing -> GitHub sign-in -> protected `/home` documentation listing. Studio is a secret direct URL entered manually; it is not linked from the landing page, documentation home, header, or drawer.
 
 ## Work
 
 - Set public route at the exact GitHub Pages base with hash routes compatible with static hosting.
-- Implement public home and right sidebar with public navigation, Login action, signed-in identity, and sign-out. Do not include a Secret Studio link or button.
+- `/` is public while signed out; authenticated navigation to `/` redirects to `/home`.
+- After successful GitHub verification, always navigate to `/home`.
+- `/home` reads GitHub and renders all pages, nested sub-pages, and cards in hierarchy.
+- The header home link targets `/` when signed out and `/home` when authenticated. No authenticated UI links back to `/`.
+- Do not include a Studio link or button anywhere; reach Studio only by manually entering `/#/studio`.
 - Implement PAT login form with show/hide, submit progress, validation, accessible errors, and verified GitHub identity/permission result.
-- Protect Studio routes by verified GitHub memory auth and return signed-out direct visits to public home.
+- Protect `/home` and Studio routes by verified GitHub memory auth and return signed-out direct visits to `/`.
 - Remove signup/email/instant-developer fake access and ensure the OAuth client ID is not mistaken for PAT verification.
 
 ## Done When
 
-- Signed-out user can visit public home and enter login from the right sidebar; the sidebar never exposes Secret Studio.
+- Signed-out user visits `/`, enters login, and successful authentication always lands on `/home`.
+- While authenticated, attempts to visit `/` are redirected to `/home`; no visible navigation returns to `/`.
+- `/home` displays repository-backed pages, nested pages, and cards.
+- The sidebar/header and `/home` never expose a Studio link.
 - Sign-in only succeeds after GitHub verifies the real user and repository push permission.
-- The authorized user can open the documented direct Studio URL; a signed-out visit returns home without rendering Studio.
+- The authorized user can manually enter the direct Studio URL; a signed-out visit returns to `/` without rendering Studio.
 - Refresh/logout/revocation return to a signed-out state; unauthorized routes never flash protected content.
 
 ## Verification
 
 Browser tests for public home, drawer navigation, successful and rejected login, deep link to Studio, expiry, logout, refresh re-auth, keyboard, and mobile layout.
 
-**Local evidence:** Public home, PAT show/hide, mocked successful GitHub verification, direct Studio home redirect, memory-only auth, sign-out/401 clearing, and drawer interactions are implemented. Workspace tests pass, but they do not constitute live GitHub acceptance.
+**Local evidence:** `/` public landing, mocked login-to-`/home`, `/home` GitHub snapshot rendering for pages/sub-pages/cards, signed-out home/Studio redirects, PAT show/hide, and drawer isolation are implemented and tested. Live sign-in/read worked against deployed commit `fd72311`; draft CRUD was exercised, but no publish was made.
 
-**Not verified:** Live PAT sign-in and Studio CRUD remain to be verified against the direct GitHub implementation.
+**Not verified:** An authenticated attempt to navigate back to `/` needs an explicit browser test. Publish/cleanup on production remains pending and requires the approved signed-in state.

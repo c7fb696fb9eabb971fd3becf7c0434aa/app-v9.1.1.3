@@ -15,7 +15,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to={APP_ROUTES.home} replace />;
+    return <Navigate to={APP_ROUTES.publicHome} replace />;
   }
 
   return children;

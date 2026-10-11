@@ -24,7 +24,7 @@ For every reusable component, document:
 
 - Apply the template to buttons/icon buttons, inputs, dialog/drawer, navigation row, page tree node, card editor, attachment picker, preview, publish panel, status indicator, and route-level page shell.
 - Establish composition rules and avoid a universal component with unrelated props/boolean modes.
-- Define state ownership: URL for navigable location, feature state for drafts, API/Git for committed records, server session for authentication.
+- Define state ownership: URL for route location, feature state for drafts, GitHub/Git for committed records, and tab-memory auth for identity/token.
 
 ## Done When
 

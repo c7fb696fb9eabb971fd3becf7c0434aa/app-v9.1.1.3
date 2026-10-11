@@ -6,12 +6,16 @@ import { SiteHeader } from '../features/navigation';
 import { APP_ROUTES } from '../../config';
 import { RouteErrorBoundary } from './RouteErrorBoundary';
 import { reportClientEvent } from '../lib/observability';
+import { useAuth } from '../features/auth';
 
 const loadLoginPage = () =>
   import('../pages/LoginPage').then((module) => ({ default: module.LoginPage }));
+const loadHomePage = () =>
+  import('../pages/HomePage').then((module) => ({ default: module.HomePage }));
 const loadStudioPage = () =>
   import('../pages/StudioPage').then((module) => ({ default: module.StudioPage }));
 const LoginPage = lazy(loadLoginPage);
+const HomePage = lazy(loadHomePage);
 const StudioPage = lazy(loadStudioPage);
 
 function canPrefetch(): boolean {
@@ -42,27 +46,48 @@ function LoadingRoute() {
 }
 
 export function AppRoutes() {
+  const { user } = useAuth();
   return (
     <div className="app-shell">
       <SiteHeader onLoginIntent={prefetchLoginPage} />
       <main className="main-content">
         <Routes>
           <Route
-            path={APP_ROUTES.home}
+            path={APP_ROUTES.publicHome}
             element={
-              <RouteErrorBoundary route="public-home">
-                <PublicHomePage />
-              </RouteErrorBoundary>
+              user ? (
+                <Navigate to={APP_ROUTES.home} replace />
+              ) : (
+                <RouteErrorBoundary route="public-home">
+                  <PublicHomePage />
+                </RouteErrorBoundary>
+              )
             }
           />
           <Route
             path={APP_ROUTES.login}
             element={
-              <RouteErrorBoundary route="login">
-                <Suspense fallback={<LoadingRoute />}>
-                  <LoginPage />
-                </Suspense>
-              </RouteErrorBoundary>
+              user ? (
+                <Navigate to={APP_ROUTES.home} replace />
+              ) : (
+                <RouteErrorBoundary route="login">
+                  <Suspense fallback={<LoadingRoute />}>
+                    <LoginPage />
+                  </Suspense>
+                </RouteErrorBoundary>
+              )
+            }
+          />
+          <Route
+            path={APP_ROUTES.home}
+            element={
+              <ProtectedRoute>
+                <RouteErrorBoundary route="home">
+                  <Suspense fallback={<LoadingRoute />}>
+                    <HomePage />
+                  </Suspense>
+                </RouteErrorBoundary>
+              </ProtectedRoute>
             }
           />
           <Route
@@ -77,7 +102,10 @@ export function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />
+          <Route
+            path="*"
+            element={<Navigate to={user ? APP_ROUTES.home : APP_ROUTES.publicHome} replace />}
+          />
         </Routes>
       </main>
     </div>

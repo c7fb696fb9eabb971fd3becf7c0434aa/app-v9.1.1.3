@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { APP_ROUTES } from '../../config';
 import { Icon } from '../components/Icon';
@@ -12,13 +12,6 @@ export function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { loginWithPat } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const requestedPath = (location.state as { from?: string } | null)?.from;
-  const returnPath =
-    requestedPath === APP_ROUTES.studioBase ||
-    requestedPath?.startsWith(`${APP_ROUTES.studioBase}/`)
-      ? requestedPath
-      : APP_ROUTES.home;
   const errorMessages: Record<string, string> = {
     github_token_invalid: 'GitHub rejected this token.',
     repository_write_denied: 'This GitHub account cannot write to the configured repository.',
@@ -36,7 +29,7 @@ export function LoginPage() {
     try {
       await loginWithPat(pat.trim());
       setPat('');
-      navigate(returnPath, { replace: true });
+      navigate(APP_ROUTES.home, { replace: true });
     } catch (cause) {
       const errorCode = cause instanceof Error ? cause.message : 'authentication_failed';
       setError(
@@ -98,7 +91,7 @@ export function LoginPage() {
         The token stays in this tab&apos;s memory and is sent only to GitHub. It is not saved
         between visits. Sign out or close the tab to clear it.
       </p>
-      <Link className="status-message" to={APP_ROUTES.home}>
+      <Link className="status-message" to={APP_ROUTES.publicHome}>
         Return to public home
       </Link>
     </section>

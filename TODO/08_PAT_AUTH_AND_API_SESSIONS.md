@@ -18,7 +18,9 @@ Authenticate directly with GitHub without an app server, external identity provi
 ## Done When
 
 - Invalid tokens and users without target-repo push access cannot reach Studio.
-- Signed-out direct Studio visits return to public home.
+- Successful sign-in always redirects to protected `/home`.
+- Signed-out direct visits to `/home` or Studio return to public `/`.
+- Authenticated attempts to visit `/` redirect to `/home`.
 - The real account is displayed after successful GitHub verification.
 
 ## Verification
