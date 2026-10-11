@@ -1,6 +1,3 @@
-import { Link } from 'react-router-dom';
-import { APP_ROUTES } from '../../config';
-
 export function PublicHomePage() {
   return (
     <section className="home-panel" aria-labelledby="home-title">
@@ -11,11 +8,8 @@ export function PublicHomePage() {
         Browse the public documentation workspace after signing in with GitHub.
       </p>
       <p className="status-message" role="status">
-        Sign in to open the documentation home.
+        Documentation is available to signed-in users.
       </p>
-      <Link className="action-button action-button-primary" to={APP_ROUTES.login}>
-        Sign in with GitHub
-      </Link>
     </section>
   );
 }

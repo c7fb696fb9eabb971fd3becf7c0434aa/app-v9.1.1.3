@@ -31,7 +31,8 @@ describe('public route and drawer', () => {
   it('renders the public home without requiring authentication', () => {
     renderAt('/');
     expect(screen.getByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
-    expect(screen.getByText('Sign in to open the documentation home.')).toBeInTheDocument();
+    expect(screen.getByText('Documentation is available to signed-in users.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /sign in with github/i })).not.toBeInTheDocument();
   });
 
   it('offers login in the right drawer and does not expose Studio navigation', async () => {
