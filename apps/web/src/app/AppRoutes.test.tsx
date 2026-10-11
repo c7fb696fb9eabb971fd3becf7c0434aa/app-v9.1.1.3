@@ -157,7 +157,11 @@ describe('public route and drawer', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
 
-      expect(await screen.findByRole('heading', { name: 'Welcome, verified-user' })).toBeVisible();
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeVisible();
+      expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('No documentation pages have been published yet.'),
+      ).not.toBeInTheDocument();
       expect(await screen.findByRole('heading', { name: 'Getting started' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Installation' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Install the app' })).toBeInTheDocument();
@@ -202,7 +206,10 @@ describe('public route and drawer', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),
-      );
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ object: { sha: 'a'.repeat(40) } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tree: { sha: 'b'.repeat(40) } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tree: [] })));
     vi.stubGlobal('fetch', fetchMock);
     try {
       renderAt('/login');
@@ -211,9 +218,8 @@ describe('public route and drawer', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
 
-      expect(
-        await screen.findByRole('heading', { name: 'Welcome, verified-user' }),
-      ).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
         `${GITHUB_API_ORIGIN}/user`,

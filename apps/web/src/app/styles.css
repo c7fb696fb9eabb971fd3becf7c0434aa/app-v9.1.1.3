@@ -123,7 +123,7 @@ input:focus-visible {
   text-decoration: none;
 }
 .main-content {
-  width: min(100% - 32px, 1040px);
+  width: min(100% - 48px, 1520px);
   margin: 0 auto;
   padding: 32px 0 64px;
 }
@@ -155,33 +155,40 @@ input:focus-visible {
   line-height: 1.65;
 }
 .documentation-home {
-  width: min(100%, 960px);
+  width: min(100%, 1180px);
   margin: 0 auto;
 }
-.documentation-home-header {
+.documentation-home-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 28px;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
+  min-height: 46px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
 }
-.documentation-eyebrow {
-  margin: 0 0 8px;
-  color: var(--accent-bright);
-  font:
-    11px/1.4 ui-monospace,
-    monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.documentation-home-header h1 {
-  margin: 0 0 8px;
+.documentation-home-nav h1 {
+  margin: 0;
+  padding: 0 14px 12px;
+  border-bottom: 2px solid var(--accent-bright);
   color: var(--text-strong);
-  font-size: 24px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.documentation-home > .status-message {
+  margin: 0 0 16px;
+}
+.documentation-home > .status-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.documentation-home > .status-error p {
+  margin: 0;
+}
+.documentation-home > .status-error .action-button {
+  flex: 0 0 auto;
+}
+.documentation-home .published-page-tree:empty {
+  display: none;
 }
 .published-page-tree {
   display: grid;
@@ -465,10 +472,42 @@ input:focus-visible {
   background: var(--surface);
 }
 .studio-workspace {
-  width: min(100%, 1180px);
+  width: min(100%, 1480px);
   margin: 0 auto;
   display: grid;
   gap: 16px;
+}
+.studio-management-header {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(300px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.studio-management-header h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 19px;
+  text-align: center;
+}
+.studio-home-link {
+  justify-self: start;
+  color: var(--accent-bright);
+  font:
+    600 12px ui-monospace,
+    monospace;
+  text-decoration: none;
+}
+.studio-management-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.studio-management-actions .action-button {
+  min-height: 38px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 .studio-heading,
 .studio-section-heading,
@@ -532,6 +571,12 @@ input:focus-visible {
   align-items: start;
   gap: 16px;
 }
+.studio-columns.has-card-editor {
+  grid-template-columns: minmax(0, 1fr);
+}
+.studio-columns.has-card-editor .studio-hierarchy {
+  display: none;
+}
 .studio-card {
   min-width: 0;
   padding: 16px;
@@ -549,6 +594,50 @@ input:focus-visible {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.studio-explorer-cards:empty {
+  display: none;
+}
+.studio-explorer-cards {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 5px 16px;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--line);
+  list-style: none;
+}
+.studio-explorer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+.studio-explorer-card.is-selected {
+  border-color: rgb(16 185 129 / 35%);
+  background: var(--accent-soft);
+}
+.studio-explorer-card > button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.studio-explorer-card > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-explorer-card small {
+  color: var(--text-muted);
 }
 .studio-tree-controls {
   display: flex;
@@ -628,6 +717,24 @@ input:focus-visible {
 .studio-form {
   display: grid;
   gap: 14px;
+}
+.studio-card-edit-form {
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  align-items: start;
+}
+.studio-card-edit-form > .studio-section-heading,
+.studio-card-edit-form > button {
+  grid-column: 1 / -1;
+}
+.studio-card-editor-fields {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.studio-card-edit-form .studio-preview {
+  position: sticky;
+  top: 16px;
+  min-height: 220px;
 }
 .studio-form > .action-button,
 .studio-form > button {
@@ -805,6 +912,120 @@ input:focus-visible {
 .studio-workspace .status-error {
   overflow-wrap: anywhere;
 }
+.dialog-panel:has(.studio-explorer-cards) {
+  width: min(100%, 900px);
+}
+.sync-settings {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sync-settings p {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.6fr) minmax(0, 1.4fr);
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-subtle);
+  font-size: 12px;
+}
+.sync-settings p:last-child {
+  border-bottom: 0;
+}
+.sync-settings strong {
+  color: var(--text-muted);
+}
+.sync-settings span,
+.sync-settings code {
+  overflow-wrap: anywhere;
+}
+.studio-deployments {
+  display: grid;
+  width: min(100%, 1200px);
+  gap: 16px;
+  margin: 0 auto;
+}
+.studio-deployments .studio-management-header {
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+}
+.studio-deployments .studio-management-header h1 {
+  font-size: 17px;
+}
+.deployments-summary h2,
+.deployment-history h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 15px;
+}
+.deployments-summary p {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.deployments-summary p strong {
+  color: var(--text);
+}
+.deployment-run-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.deployment-run-list li {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, auto) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  font-size: 12px;
+}
+.deployment-run-list a {
+  overflow: hidden;
+  color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deployment-run-list time,
+.deployment-run-list code {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.deployment-state {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  text-transform: capitalize;
+}
+.deployment-state.state-success {
+  border-color: rgb(16 185 129 / 40%);
+  color: var(--accent-bright);
+}
+.deployment-state.state-failure,
+.deployment-state.state-cancelled,
+.deployment-state.state-timed_out {
+  border-color: rgb(251 113 133 / 40%);
+  color: var(--status-error);
+}
+.deployment-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--status-error);
+  font-size: 13px;
+}
+.deployment-error p {
+  margin: 0;
+}
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -850,16 +1071,11 @@ input:focus-visible {
     padding-inline: 12px;
   }
   .main-content {
-    width: min(100% - 24px, 1040px);
+    width: min(100% - 24px, 1520px);
     padding-top: 20px;
   }
   .login-panel,
   .home-panel {
-    padding: 20px;
-  }
-  .documentation-home-header {
-    align-items: flex-start;
-    flex-direction: column;
     padding: 20px;
   }
   .published-page {
@@ -868,9 +1084,22 @@ input:focus-visible {
   .published-page .published-page {
     margin-left: 8px;
   }
+  .studio-management-header,
   .studio-heading,
   .studio-content-card {
     flex-direction: column;
+  }
+  .studio-management-header,
+  .studio-deployments .studio-management-header {
+    display: flex;
+    align-items: stretch;
+  }
+  .studio-management-header h1 {
+    text-align: left;
+  }
+  .studio-management-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
   .studio-heading-actions {
     width: 100%;
@@ -881,6 +1110,12 @@ input:focus-visible {
   .studio-columns {
     grid-template-columns: minmax(0, 1fr);
   }
+  .studio-card-edit-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio-card-edit-form .studio-preview {
+    position: static;
+  }
   .studio-tree-item {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -890,6 +1125,18 @@ input:focus-visible {
   .studio-attachment-list li {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .studio-explorer-card,
+  .deployment-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .deployment-run-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .sync-settings p {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

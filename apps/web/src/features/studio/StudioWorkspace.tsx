@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import type {
   Attachment,
   CardRecord,
@@ -150,25 +151,37 @@ function AttachmentPreview({
 
 function PageTree({
   nodes,
+  cards,
   level,
   selectedId,
+  selectedCardId,
   onSelect,
   onEdit,
   onAddChild,
   onMove,
   onDelete,
+  onSelectCard,
+  onEditCard,
+  onMoveCard,
+  onDeleteCard,
   collapsedIds,
   onToggle,
   forceExpanded,
 }: {
   nodes: PageNode[];
+  cards: readonly CardRecord[];
   level?: number;
   selectedId: string | null;
+  selectedCardId: string | null;
   onSelect: (page: PageNode) => void;
   onEdit: (page: PageNode) => void;
   onAddChild: (page: PageNode) => void;
   onMove: (page: PageNode, direction: -1 | 1) => void;
   onDelete: (page: PageNode) => void;
+  onSelectCard: (card: CardRecord) => void;
+  onEditCard: (card: CardRecord) => void;
+  onMoveCard: (card: CardRecord, direction: -1 | 1) => void;
+  onDeleteCard: (card: CardRecord) => void;
   collapsedIds: ReadonlySet<string>;
   onToggle: (pageId: string) => void;
   forceExpanded: boolean;
@@ -242,17 +255,72 @@ function PageTree({
               </button>
             </div>
           </div>
+          <ul className="studio-explorer-cards" aria-label={`${page.title} cards`}>
+            {cards
+              .filter((card) => card.pageId === page.id)
+              .sort(
+                (left, right) => left.order - right.order || left.title.localeCompare(right.title),
+              )
+              .map((card) => (
+                <li
+                  className={`studio-explorer-card${selectedCardId === card.id ? 'is-selected' : ''}`}
+                  key={card.id}
+                >
+                  <button type="button" onClick={() => onSelectCard(card)}>
+                    <span>{card.title}</span>
+                    {card.tag && <small>{card.tag}</small>}
+                  </button>
+                  <div className="studio-tree-actions">
+                    <button
+                      type="button"
+                      aria-label={`Edit card ${card.title}`}
+                      onClick={() => onEditCard(card)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move card ${card.title} up`}
+                      onClick={() => onMoveCard(card, -1)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move card ${card.title} down`}
+                      onClick={() => onMoveCard(card, 1)}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      className="studio-danger-link"
+                      type="button"
+                      aria-label={`Delete card ${card.title}`}
+                      onClick={() => onDeleteCard(card)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              ))}
+          </ul>
           {page.children.length > 0 && (forceExpanded || !collapsedIds.has(page.id)) && (
             <div className="studio-tree-children">
               <PageTree
                 nodes={page.children}
+                cards={cards}
                 level={(level ?? 1) + 1}
                 selectedId={selectedId}
+                selectedCardId={selectedCardId}
                 onSelect={onSelect}
                 onEdit={onEdit}
                 onAddChild={onAddChild}
                 onMove={onMove}
                 onDelete={onDelete}
+                onSelectCard={onSelectCard}
+                onEditCard={onEditCard}
+                onMoveCard={onMoveCard}
+                onDeleteCard={onDeleteCard}
                 collapsedIds={collapsedIds}
                 onToggle={onToggle}
                 forceExpanded={forceExpanded}
@@ -284,6 +352,11 @@ export function StudioWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [hierarchyOpen, setHierarchyOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncTesting, setSyncTesting] = useState(false);
+  const [syncTestResult, setSyncTestResult] = useState<string | null>(null);
+  const [syncTestError, setSyncTestError] = useState(false);
   const [deletePage, setDeletePage] = useState<PageNode | null>(null);
   const [deleteCard, setDeleteCard] = useState<CardRecord | null>(null);
   const [commitMessage, setCommitMessage] = useState('Update GreenDocs content');
@@ -358,6 +431,14 @@ export function StudioWorkspace() {
     if (!editorIsClosed()) return;
     setSelectedPageId(page.id);
     setSelectedCardId(null);
+    setPageForm(null);
+    setCardForm(null);
+  }
+
+  function chooseCard(card: CardRecord) {
+    if (!editorIsClosed()) return;
+    setSelectedPageId(card.pageId);
+    setSelectedCardId(card.id);
     setPageForm(null);
     setCardForm(null);
   }
@@ -517,7 +598,9 @@ export function StudioWorkspace() {
   }
 
   function moveCard(card: CardRecord, direction: -1 | 1) {
-    const siblings = [...pageCards];
+    const siblings = cards
+      .filter((item) => item.pageId === card.pageId)
+      .sort((left, right) => left.order - right.order || left.title.localeCompare(right.title));
     const index = siblings.findIndex((item) => item.id === card.id);
     const adjacent = siblings[index + direction];
     if (!adjacent) return;
@@ -720,6 +803,22 @@ export function StudioWorkspace() {
     void loadSnapshot();
   }
 
+  async function testRepositoryConnection() {
+    if (syncTesting) return;
+    setSyncTesting(true);
+    setSyncTestResult(null);
+    setSyncTestError(false);
+    try {
+      const snapshot = await refreshSnapshot();
+      setSyncTestResult(`Connected. Repository content is readable at ${snapshot.sourceCommit}.`);
+    } catch (cause) {
+      setSyncTestResult(friendlyError(cause));
+      setSyncTestError(true);
+    } finally {
+      setSyncTesting(false);
+    }
+  }
+
   const currentPageDraft = pageForm
     ? pageRecordFromDraft(
         { ...pageForm, slug: pageForm.slug || normalizeSlug(pageForm.title) },
@@ -733,10 +832,38 @@ export function StudioWorkspace() {
 
   return (
     <section className="studio-workspace" aria-labelledby="studio-title">
+      <header className="studio-management-header">
+        <Link className="studio-home-link" to="/home">
+          Go to /home
+        </Link>
+        <h1 id="studio-title">GUI Management Portal</h1>
+        <nav className="studio-management-actions" aria-label="Studio tools">
+          <Button
+            type="button"
+            onClick={() => setHierarchyOpen(true)}
+            disabled={loading || !baseSnapshot}
+          >
+            Hierarchy Explorer
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              setSyncTestResult(null);
+              setSyncOpen(true);
+            }}
+            disabled={loading || !baseSnapshot}
+          >
+            GitHub Sync
+          </Button>
+          <Link className="action-button action-button-secondary" to="/studio/deployments">
+            Deployments
+          </Link>
+        </nav>
+      </header>
+
       <header className="studio-heading">
         <div>
-          <p className="studio-eyebrow">Repository editor</p>
-          <h1 id="studio-title">Secret Studio</h1>
+          <p className="studio-eyebrow">Content workspace</p>
           <p className="studio-muted">
             Signed in as {user?.login}. Drafts stay in memory until you publish.
           </p>
@@ -813,8 +940,161 @@ export function StudioWorkspace() {
         </p>
       )}
 
+      {hierarchyOpen && (
+        <Dialog title="Page & card hierarchy explorer" onClose={() => setHierarchyOpen(false)}>
+          <p className="studio-muted">
+            Select a page to edit its content, or use the actions to organize the draft hierarchy.
+          </p>
+          <TextInput
+            id="explorer-page-search"
+            label="Search pages"
+            type="search"
+            value={pageSearch}
+            onChange={(event) => setPageSearch(event.target.value)}
+          />
+          <div className="studio-tree-controls">
+            <Button
+              type="button"
+              onClick={() => {
+                setHierarchyOpen(false);
+                startNewPage();
+              }}
+            >
+              Create page
+            </Button>
+            <Button
+              type="button"
+              disabled={!selectedPageId}
+              onClick={() => {
+                setHierarchyOpen(false);
+                startNewCard();
+              }}
+            >
+              Create card
+            </Button>
+            <Button type="button" onClick={() => setCollapsedPageIds(new Set())}>
+              Expand all
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setCollapsedPageIds(new Set(pages.map((page) => page.id)))}
+            >
+              Collapse all
+            </Button>
+          </div>
+          <PageTree
+            nodes={visiblePageTree}
+            cards={cards}
+            selectedId={selectedPageId}
+            selectedCardId={selectedCardId}
+            onSelect={(page) => {
+              choosePage(page);
+              setHierarchyOpen(false);
+            }}
+            onEdit={(page) => {
+              setHierarchyOpen(false);
+              editPage(page);
+            }}
+            onAddChild={(page) => {
+              setHierarchyOpen(false);
+              startNewPage(page.id);
+            }}
+            onMove={movePage}
+            onDelete={(page) => {
+              setHierarchyOpen(false);
+              requestPageDeletion(page);
+            }}
+            onSelectCard={(card) => {
+              chooseCard(card);
+              setHierarchyOpen(false);
+            }}
+            onEditCard={(card) => {
+              setHierarchyOpen(false);
+              editCard(card);
+            }}
+            onMoveCard={moveCard}
+            onDeleteCard={(card) => {
+              setHierarchyOpen(false);
+              setDeleteCard(card);
+            }}
+            collapsedIds={collapsedPageIds}
+            forceExpanded={pageSearch.trim().length > 0}
+            onToggle={(pageId) =>
+              setCollapsedPageIds((current) => {
+                const next = new Set(current);
+                if (next.has(pageId)) next.delete(pageId);
+                else next.add(pageId);
+                return next;
+              })
+            }
+          />
+        </Dialog>
+      )}
+
+      {syncOpen && baseSnapshot && (
+        <Dialog title="GitHub repository sync" onClose={() => setSyncOpen(false)}>
+          <div className="sync-settings">
+            <p>
+              <strong>Owner</strong>
+              <span>{baseSnapshot.repository.owner}</span>
+            </p>
+            <p>
+              <strong>Repository</strong>
+              <span>{baseSnapshot.repository.name}</span>
+            </p>
+            <p>
+              <strong>Branch</strong>
+              <span>{baseSnapshot.repository.branch}</span>
+            </p>
+            <p>
+              <strong>GitHub account</strong>
+              <span>{user?.login ?? 'Not signed in'}</span>
+            </p>
+            <p>
+              <strong>Authentication</strong>
+              <span>Current session only; token is not displayed or stored in this page.</span>
+            </p>
+            <p>
+              <strong>Source commit</strong>
+              <code>{baseSnapshot.sourceCommit}</code>
+            </p>
+          </div>
+          <p className="studio-muted">
+            The repository target is fixed for this workspace. Use the active GitHub sign-in to
+            verify access; credentials are never requested or saved here.
+          </p>
+          {syncTestResult && (
+            <p
+              className={`status-message${syncTestError ? 'status-error' : ''}`}
+              role={syncTestError ? 'alert' : 'status'}
+            >
+              {syncTestResult}
+            </p>
+          )}
+          <div className="studio-inline-actions">
+            <Button
+              type="button"
+              onClick={() => void testRepositoryConnection()}
+              disabled={syncTesting}
+            >
+              {syncTesting ? 'Testing…' : 'Test connection'}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setSyncOpen(false);
+                reloadRepository();
+              }}
+              disabled={loading || saving}
+            >
+              {loading ? 'Syncing…' : 'Sync repository'}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
       {!loading && baseSnapshot && (
-        <div className="studio-columns">
+        <div className={cardForm ? 'studio-columns has-card-editor' : 'studio-columns'}>
           <section className="studio-card studio-hierarchy" aria-labelledby="hierarchy-title">
             <div className="studio-section-heading">
               <div>
@@ -845,12 +1125,18 @@ export function StudioWorkspace() {
             </div>
             <PageTree
               nodes={visiblePageTree}
+              cards={cards}
               selectedId={selectedPageId}
+              selectedCardId={selectedCardId}
               onSelect={choosePage}
               onEdit={editPage}
               onAddChild={(page) => startNewPage(page.id)}
               onMove={movePage}
               onDelete={requestPageDeletion}
+              onSelectCard={chooseCard}
+              onEditCard={editCard}
+              onMoveCard={moveCard}
+              onDeleteCard={setDeleteCard}
               collapsedIds={collapsedPageIds}
               forceExpanded={pageSearch.trim().length > 0}
               onToggle={(pageId) =>
@@ -967,216 +1253,218 @@ export function StudioWorkspace() {
                 </Button>
               </form>
             ) : cardForm ? (
-              <form className="studio-form" onSubmit={applyCardForm}>
+              <form className="studio-form studio-card-edit-form" onSubmit={applyCardForm}>
                 <div className="studio-section-heading">
                   <h2>
                     {baseSnapshot.cards.some((card) => card.id === cardForm.id)
                       ? 'Edit card'
-                      : 'Create card'}
+                      : 'Create new card'}
                   </h2>
                   <Button type="button" onClick={cancelCardForm}>
                     Cancel
                   </Button>
                 </div>
-                <TextInput
-                  id="card-title"
-                  label="Card title"
-                  maxLength={160}
-                  required
-                  value={cardForm.title}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, title: event.target.value }))
-                  }
-                />
-                <TextInput
-                  id="card-tag"
-                  label="Tag"
-                  maxLength={80}
-                  value={cardForm.tag}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, tag: event.target.value }))
-                  }
-                />
-                <label className="field-label" htmlFor="card-page">
-                  Page
-                </label>
-                <select
-                  id="card-page"
-                  className="text-field"
-                  value={cardForm.pageId}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, pageId: event.target.value }))
-                  }
-                >
-                  {pages.map((page) => (
-                    <option value={page.id} key={page.id}>
-                      {page.title}
-                    </option>
-                  ))}
-                </select>
-                <label className="field-label" htmlFor="card-definition">
-                  Definition
-                </label>
-                <textarea
-                  id="card-definition"
-                  className="text-field studio-textarea"
-                  maxLength={10000}
-                  required
-                  value={cardForm.definition}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, definition: event.target.value }))
-                  }
-                />
-                <label className="field-label" htmlFor="card-key-rule">
-                  Key rule
-                </label>
-                <textarea
-                  id="card-key-rule"
-                  className="text-field studio-textarea"
-                  maxLength={5000}
-                  value={cardForm.keyRule}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, keyRule: event.target.value }))
-                  }
-                />
-                <label className="field-label" htmlFor="card-code">
-                  Code
-                </label>
-                <textarea
-                  id="card-code"
-                  className="text-field studio-textarea"
-                  maxLength={20000}
-                  value={cardForm.code}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, code: event.target.value }))
-                  }
-                />
-                <label className="field-label" htmlFor="card-spec">
-                  Specification
-                </label>
-                <textarea
-                  id="card-spec"
-                  className="text-field studio-textarea"
-                  maxLength={20000}
-                  value={cardForm.spec}
-                  onChange={(event) =>
-                    updateCardForm((current) => ({ ...current, spec: event.target.value }))
-                  }
-                />
-                <fieldset className="studio-attachments">
-                  <legend>Attachments</legend>
-                  <label className="field-label" htmlFor="attachment-file">
-                    Upload image, audio, video, or PDF (10 MiB max)
-                  </label>
-                  <input
-                    id="attachment-file"
-                    className="text-field"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/ogg,audio/wav,video/mp4,video/webm,application/pdf"
-                    onChange={(event) => {
-                      void addAssetFile(event.target.files?.[0]);
-                      event.currentTarget.value = '';
-                    }}
+                <div className="studio-card-editor-fields">
+                  <TextInput
+                    id="card-title"
+                    label="Card title"
+                    maxLength={160}
+                    required
+                    value={cardForm.title}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, title: event.target.value }))
+                    }
                   />
-                  <div className="studio-link-fields">
-                    <TextInput
-                      id="attachment-link-label"
-                      label="External link label"
-                      value={linkLabel}
-                      onChange={(event) => setLinkLabel(event.target.value)}
-                    />
-                    <TextInput
-                      id="attachment-link-url"
-                      label="External link URL"
-                      type="url"
-                      value={linkUrl}
-                      onChange={(event) => setLinkUrl(event.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        if (cardForm.attachments.length >= CONTENT_LIMITS.attachmentsPerCard) {
-                          setError(
-                            `Cards can have at most ${CONTENT_LIMITS.attachmentsPerCard} attachments.`,
-                          );
-                          return;
-                        }
-                        if (!linkLabel.trim() || !linkUrl.trim()) {
-                          setError('Enter both a label and URL before adding an external link.');
-                          return;
-                        }
-                        let parsed: URL;
-                        try {
-                          parsed = new URL(linkUrl);
-                        } catch {
-                          setError('Enter a valid http or https URL.');
-                          return;
-                        }
-                        if (!['http:', 'https:'].includes(parsed.protocol)) {
-                          setError('External links must use http or https.');
-                          return;
-                        }
-                        updateCardForm((current) => ({
-                          ...current,
-                          attachments: [
-                            ...current.attachments,
-                            {
-                              id: crypto.randomUUID(),
-                              kind: 'link',
-                              label: linkLabel.trim().slice(0, 160),
-                              url: parsed.href,
-                            },
-                          ],
-                        }));
-                        setLinkLabel('');
-                        setLinkUrl('');
-                        setError(null);
+                  <TextInput
+                    id="card-tag"
+                    label="Tag"
+                    maxLength={80}
+                    value={cardForm.tag}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, tag: event.target.value }))
+                    }
+                  />
+                  <label className="field-label" htmlFor="card-page">
+                    Page
+                  </label>
+                  <select
+                    id="card-page"
+                    className="text-field"
+                    value={cardForm.pageId}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, pageId: event.target.value }))
+                    }
+                  >
+                    {pages.map((page) => (
+                      <option value={page.id} key={page.id}>
+                        {page.title}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="field-label" htmlFor="card-definition">
+                    Definition
+                  </label>
+                  <textarea
+                    id="card-definition"
+                    className="text-field studio-textarea"
+                    maxLength={10000}
+                    required
+                    value={cardForm.definition}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, definition: event.target.value }))
+                    }
+                  />
+                  <label className="field-label" htmlFor="card-key-rule">
+                    Key rule
+                  </label>
+                  <textarea
+                    id="card-key-rule"
+                    className="text-field studio-textarea"
+                    maxLength={5000}
+                    value={cardForm.keyRule}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, keyRule: event.target.value }))
+                    }
+                  />
+                  <label className="field-label" htmlFor="card-code">
+                    Code
+                  </label>
+                  <textarea
+                    id="card-code"
+                    className="text-field studio-textarea"
+                    maxLength={20000}
+                    value={cardForm.code}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, code: event.target.value }))
+                    }
+                  />
+                  <label className="field-label" htmlFor="card-spec">
+                    Specification
+                  </label>
+                  <textarea
+                    id="card-spec"
+                    className="text-field studio-textarea"
+                    maxLength={20000}
+                    value={cardForm.spec}
+                    onChange={(event) =>
+                      updateCardForm((current) => ({ ...current, spec: event.target.value }))
+                    }
+                  />
+                  <fieldset className="studio-attachments">
+                    <legend>Attachments</legend>
+                    <label className="field-label" htmlFor="attachment-file">
+                      Upload image, audio, video, or PDF (10 MiB max)
+                    </label>
+                    <input
+                      id="attachment-file"
+                      className="text-field"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/ogg,audio/wav,video/mp4,video/webm,application/pdf"
+                      onChange={(event) => {
+                        void addAssetFile(event.target.files?.[0]);
+                        event.currentTarget.value = '';
                       }}
-                    >
-                      Add link
-                    </Button>
-                  </div>
-                  {cardForm.attachments.length > 0 && (
-                    <ul className="studio-attachment-list">
-                      {cardForm.attachments.map((attachment) => (
-                        <li key={attachment.id}>
-                          <span>
-                            {attachment.label} <small>{attachment.kind}</small>
-                          </span>
-                          <div className="studio-inline-actions">
-                            <Button
-                              type="button"
-                              aria-label={`Move attachment ${attachment.label} up`}
-                              onClick={() =>
-                                moveAttachment(cardForm.attachments.indexOf(attachment), -1)
-                              }
-                            >
-                              ↑
-                            </Button>
-                            <Button
-                              type="button"
-                              aria-label={`Move attachment ${attachment.label} down`}
-                              onClick={() =>
-                                moveAttachment(cardForm.attachments.indexOf(attachment), 1)
-                              }
-                            >
-                              ↓
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="danger"
-                              onClick={() => stageAttachmentRemoval(attachment)}
-                            >
-                              Remove {attachment.label}
-                            </Button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </fieldset>
+                    />
+                    <div className="studio-link-fields">
+                      <TextInput
+                        id="attachment-link-label"
+                        label="External link label"
+                        value={linkLabel}
+                        onChange={(event) => setLinkLabel(event.target.value)}
+                      />
+                      <TextInput
+                        id="attachment-link-url"
+                        label="External link URL"
+                        type="url"
+                        value={linkUrl}
+                        onChange={(event) => setLinkUrl(event.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (cardForm.attachments.length >= CONTENT_LIMITS.attachmentsPerCard) {
+                            setError(
+                              `Cards can have at most ${CONTENT_LIMITS.attachmentsPerCard} attachments.`,
+                            );
+                            return;
+                          }
+                          if (!linkLabel.trim() || !linkUrl.trim()) {
+                            setError('Enter both a label and URL before adding an external link.');
+                            return;
+                          }
+                          let parsed: URL;
+                          try {
+                            parsed = new URL(linkUrl);
+                          } catch {
+                            setError('Enter a valid http or https URL.');
+                            return;
+                          }
+                          if (!['http:', 'https:'].includes(parsed.protocol)) {
+                            setError('External links must use http or https.');
+                            return;
+                          }
+                          updateCardForm((current) => ({
+                            ...current,
+                            attachments: [
+                              ...current.attachments,
+                              {
+                                id: crypto.randomUUID(),
+                                kind: 'link',
+                                label: linkLabel.trim().slice(0, 160),
+                                url: parsed.href,
+                              },
+                            ],
+                          }));
+                          setLinkLabel('');
+                          setLinkUrl('');
+                          setError(null);
+                        }}
+                      >
+                        Add link
+                      </Button>
+                    </div>
+                    {cardForm.attachments.length > 0 && (
+                      <ul className="studio-attachment-list">
+                        {cardForm.attachments.map((attachment) => (
+                          <li key={attachment.id}>
+                            <span>
+                              {attachment.label} <small>{attachment.kind}</small>
+                            </span>
+                            <div className="studio-inline-actions">
+                              <Button
+                                type="button"
+                                aria-label={`Move attachment ${attachment.label} up`}
+                                onClick={() =>
+                                  moveAttachment(cardForm.attachments.indexOf(attachment), -1)
+                                }
+                              >
+                                ↑
+                              </Button>
+                              <Button
+                                type="button"
+                                aria-label={`Move attachment ${attachment.label} down`}
+                                onClick={() =>
+                                  moveAttachment(cardForm.attachments.indexOf(attachment), 1)
+                                }
+                              >
+                                ↓
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="danger"
+                                onClick={() => stageAttachmentRemoval(attachment)}
+                              >
+                                Remove {attachment.label}
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </fieldset>
+                </div>
                 <section className="studio-preview" aria-label="Card draft preview">
-                  <h3>Card preview</h3>
+                  <h3>Live preview</h3>
                   <h4>{cardForm.title || 'Untitled card'}</h4>
                   {cardForm.tag && <span className="studio-tag">{cardForm.tag}</span>}
                   <p>{cardForm.definition || 'Definition preview'}</p>

@@ -160,7 +160,7 @@ function errorMessage(error: unknown): string {
 }
 
 export function HomePage() {
-  const { githubRequest, user } = useAuth();
+  const { githubRequest } = useAuth();
   const client = useMemo(() => createGitHubRepositoryClient(githubRequest), [githubRequest]);
   const [snapshot, setSnapshot] = useState<RepositorySnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -190,19 +190,8 @@ export function HomePage() {
   const pageTree = useMemo(() => buildPageTree(snapshot?.pages ?? []), [snapshot]);
   return (
     <section className="documentation-home" aria-labelledby="home-title">
-      <header className="documentation-home-header">
-        <div>
-          <p className="documentation-eyebrow">Documentation home</p>
-          <h1 id="home-title">Welcome, {user?.login}</h1>
-          <p className="home-copy">
-            {snapshot
-              ? `${snapshot.repository.owner}/${snapshot.repository.name}`
-              : 'Loading repository content…'}
-          </p>
-        </div>
-        <Button type="button" disabled={loading} onClick={() => setReload((value) => value + 1)}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </Button>
+      <header className="documentation-home-nav">
+        <h1 id="home-title">Home</h1>
       </header>
       {loading && (
         <p className="status-message" role="status">
@@ -216,11 +205,6 @@ export function HomePage() {
             Try again
           </Button>
         </div>
-      )}
-      {!loading && !error && snapshot && pageTree.length === 0 && (
-        <p className="status-message" role="status">
-          No documentation pages have been published yet.
-        </p>
       )}
       {!loading && !error && snapshot && (
         <div className="published-page-tree">
