@@ -989,24 +989,6 @@ export function StudioWorkspace() {
         </div>
       </header>
 
-      {baseSnapshot && (
-        <div className="studio-repository" aria-label="Repository source">
-          <span>
-            {baseSnapshot.repository.owner}/{baseSnapshot.repository.name}
-          </span>
-          <span>branch: {baseSnapshot.repository.branch}</span>
-          <span>
-            base commit <code>{baseSnapshot.sourceCommit.slice(0, 12)}</code>
-          </span>
-          <span>
-            {request
-              ? `${request.mutations.length} unpublished changes`
-              : pageForm || cardForm
-                ? 'Unsaved editor changes'
-                : 'Clean'}
-          </span>
-        </div>
-      )}
       {loading && (
         <p className="status-message" role="status">
           Loading repository snapshot…

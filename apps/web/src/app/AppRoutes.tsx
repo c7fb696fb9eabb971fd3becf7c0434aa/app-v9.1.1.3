@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PublicHomePage } from '../pages/PublicHomePage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { SiteHeader } from '../features/navigation';
@@ -47,9 +47,11 @@ function LoadingRoute() {
 
 export function AppRoutes() {
   const { user } = useAuth();
+  const { pathname } = useLocation();
+  const isStudioWorkspace = pathname.replace(/\/+$/, '') === APP_ROUTES.studioBase;
   return (
     <div className="app-shell">
-      <SiteHeader onLoginIntent={prefetchLoginPage} />
+      {!isStudioWorkspace && <SiteHeader onLoginIntent={prefetchLoginPage} />}
       <main className="main-content">
         <Routes>
           <Route

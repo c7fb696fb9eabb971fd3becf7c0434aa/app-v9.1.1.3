@@ -75,6 +75,7 @@ describe('StudioWorkspace management surfaces', () => {
     const { container } = renderStudio();
 
     expect(await screen.findByRole('heading', { name: 'GUI Management Portal' })).toBeVisible();
+    expect(screen.queryByLabelText('Repository source')).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Hierarchy Explorer' })).toBeEnabled(),
     );

@@ -14,7 +14,7 @@ Implement GUI authoring and modification of cards plus the real attachments repr
 - Add/remove/reorder typed attachments for audio, video, PDF, images, and external links.
 - Validate supported file types, limits, URLs, and asset references; generate stable asset IDs.
 - Preview actual card state and media actions. Each visible action must perform its stated behavior; remove simulation/filler actions.
-- Put the actual card draft preview and its diagnostics next to the authoring form in the two-column Studio workspace; implement TODO 17 before calling UI acceptance complete.
+- Put the actual card draft preview and its diagnostics next to the authoring form in the aligned, responsive two-column Studio canvas. The shared site header/global menu and repository status strip must not appear in the Studio layout; implement and visually verify TODO 17 before calling UI acceptance complete.
 - Track draft/base commit and display dirty/invalid/conflict state.
 - Include asset writes/deletes in the same content commit batch as the card.
 
@@ -32,4 +32,4 @@ Test card fields, media upload/link validation, replacement/removal, keyboard co
 
 **Not verified:** Authenticated commit/reload and deployed public rendering require configured auth/cloud infrastructure and an isolated staging repository. Browser file upload/media playback and full mobile/accessibility acceptance have not been performed.
 
-**Screenshot-driven gaps:** The current workspace is page-tree-first and does not yet match the target composer. TODO 17 tracks the destination selector, dedicated media references, preview toolbar, consumer diagnostics, and authoring layout as explicit acceptance work.
+**Screenshot-driven gaps:** Live review after commit `e6bc269` rejected visual acceptance: shared site chrome and the repository strip remain visible, elements are misaligned/not responsive, and the Select/GitHub popups are incomplete. TODO 17 tracks this required rework, including the dialog, real-action, alignment, and deployed visual acceptance criteria.

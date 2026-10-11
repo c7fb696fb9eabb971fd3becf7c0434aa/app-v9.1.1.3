@@ -13,7 +13,7 @@ Make publishing intentional, atomic, observable, and recoverable.
 - Show target repository/branch and current/base commit; require explicit Publish confirmation.
 - Send the complete batch through the GitHub Git Database API; preserve the draft on any failure.
 - Return commit SHA/URL and track the exact Actions workflow run for that SHA.
-- Route `Queue in Deployments` to deployment status without committing; route `Commit & Push to GitHub` through the explicit reviewed publish flow.
+- Keep deployment dashboard and status presentation on the separate Deployments page. Studio may hand a queued draft/workflow to that page through the defined integration, without publishing or embedding a duplicate deployment interface; route `Commit & Push to GitHub` through the explicit reviewed publish flow.
 - Distinguish committed, CI validation failed, build failed, deployment pending, deployed, and deployment unknown.
 - Provide reload/reconcile paths; expected-head protection prevents a retry from overwriting a concurrent commit.
 
@@ -29,4 +29,4 @@ End-to-end test successful publish, invalid batch, stale branch, network retry, 
 
 **Implemented locally:** A review dialog displays fixed repository/branch, base commit, mutation summary, commit message, and explicit confirmation. Publish uses one Git tree/commit and expected-head non-force update. Validation/conflict/GitHub failures preserve the draft. On success, the UI shows the commit SHA/URL and does not claim deployment completion before the matching Actions result.
 
-**Not implemented/verified:** The UI does not yet poll the Actions run/deployment result. Real commit, concurrent publish, retry/replay, CI state, and deployed status require authenticated browser acceptance on an approved target.
+**Not implemented/verified:** The UI does not yet poll the Actions run/deployment result. Real commit, concurrent publish, retry/replay, CI state, and deployed status require authenticated browser acceptance on an approved target. Studio-to-Deployments handoff must be verified while preserving separate page ownership; see TODO 17.

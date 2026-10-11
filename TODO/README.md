@@ -34,13 +34,13 @@
 |  14 | CI and Pages deployment                              | 04, 05, 06, 13                      | IN PROGRESS |
 |  15 | End-to-end quality, security, and operations gates   | 05-14, 05A-05B, 09A-09C, 10A-10C    | NOT STARTED |
 |  16 | Live acceptance and production release verification  | 14, 15                              | NOT STARTED |
-| 17A | Screenshot-driven Studio workspace layout            | 06, 07, 11, 12, 13                  | IN PROGRESS |
-| 17B | Studio destination page selector                     | 17A                                 | IN PROGRESS |
-| 17C | Studio card metadata and content composer            | 17A, 17B                            | IN PROGRESS |
-| 17D | Studio dedicated media attachments                   | 17C                                 | IN PROGRESS |
-| 17E | Studio live preview, toolbar, and diagnostics        | 17C, 17D                            | NOT STARTED |
-| 17F | Studio queue, commit, and deployment actions         | 17C, 17D                            | NOT STARTED |
-| 17G | Studio screenshot, accessibility, and workflow QA    | 17B-17F                             | NOT STARTED |
+| 17A | Independent Studio canvas and layout alignment       | 06, 07, 11, 12, 13                  | IN PROGRESS |
+| 17B | Functional destination picker dialog                 | 17A                                 | IN PROGRESS |
+| 17C | Responsive card composer and real action controls    | 17A, 17B                            | IN PROGRESS |
+| 17D | Dedicated typed media upload/reference controls      | 17C                                 | IN PROGRESS |
+| 17E | Screenshot-matched preview and functional toolbar    | 17C, 17D                            | NOT STARTED |
+| 17F | GitHub sync dialog and Deployments handoff           | 17A-17E                             | IN PROGRESS |
+| 17G | Deployed visual, responsive, accessibility QA        | 17A-17F                             | NOT STARTED |
 
 ## Execution Rules
 
