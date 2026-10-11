@@ -9,10 +9,6 @@
       "types": "./index.d.ts",
       "default": "./index.d.ts"
     },
-    "./api-paths": {
-      "types": "./api-paths.d.ts",
-      "import": "./api-paths.js"
-    },
     "./runtime-config": {
       "types": "./runtime-config.d.ts",
       "import": "./runtime-config.js"

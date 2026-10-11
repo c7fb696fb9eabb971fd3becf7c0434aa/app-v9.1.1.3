@@ -101,7 +101,10 @@ export function findModuleBoundaryViolations(root = workspaceRoot) {
     const isWebFile = isWithin(filePath, path.join(webRoot, 'src'));
 
     for (const specifier of importedSpecifiers(sourceText)) {
-      if (isWebFile && /^@greendocs\/(?!contracts(?:\/|$))/.test(specifier)) {
+      if (
+        isWebFile &&
+        /^@greendocs\/(?!contracts(?:\/|$)|content-schema(?:\/|$))/.test(specifier)
+      ) {
         violations.push(
           `${path.relative(root, filePath)} imports forbidden workspace package ${specifier}`,
         );

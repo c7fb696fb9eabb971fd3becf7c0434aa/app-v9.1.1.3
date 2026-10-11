@@ -11,10 +11,10 @@ Make publishing intentional, atomic, observable, and recoverable.
 
 - Build a review page/drawer showing all creates, edits, moves, reorders, deletes, and asset changes.
 - Show target repository/branch and current/base commit; require explicit Publish confirmation.
-- Send the complete batch once with idempotency key; display progress and preserve draft on any failure.
+- Send the complete batch through the GitHub Git Database API; preserve the draft on any failure.
 - Return commit SHA/URL and track the exact Actions workflow run for that SHA.
 - Distinguish committed, CI validation failed, build failed, deployment pending, deployed, and deployment unknown.
-- Provide retry or reconcile paths without silently generating duplicate commits.
+- Provide reload/reconcile paths; expected-head protection prevents a retry from overwriting a concurrent commit.
 
 ## Done When
 
@@ -26,6 +26,6 @@ Make publishing intentional, atomic, observable, and recoverable.
 
 End-to-end test successful publish, invalid batch, stale branch, network retry, duplicate request, failed CI, successful Pages deploy, and delayed workflow status.
 
-**Implemented locally:** A review dialog displays fixed repository/branch, base commit, mutation summary, commit message, and explicit confirmation. Publish sends the complete batch once with an idempotency key and expected head; the same key is retained across ambiguous retries of an unchanged request. Validation/conflict/API failures preserve the draft. On success, the UI shows the commit SHA/URL and explicitly does not claim deployment completion.
+**Implemented locally:** A review dialog displays fixed repository/branch, base commit, mutation summary, commit message, and explicit confirmation. Publish uses one Git tree/commit and expected-head non-force update. Validation/conflict/GitHub failures preserve the draft. On success, the UI shows the commit SHA/URL and does not claim deployment completion before the matching Actions result.
 
-**Not implemented/verified:** There is no Actions-run/deployment-status API or Pages deploy workflow yet; the repository workflow currently runs CI only. Successful real commit, concurrent publish, retry/replay, CI state, and deployed status require provisioned auth and a staging repository.
+**Not implemented/verified:** The UI does not yet poll the Actions run/deployment result. Real commit, concurrent publish, retry/replay, CI state, and deployed status require authenticated browser acceptance on an approved target.

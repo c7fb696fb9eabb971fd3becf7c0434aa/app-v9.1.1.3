@@ -7,9 +7,8 @@
     "node": ">=24.21.0 <25"
   },
   "scripts": {
-    "dev": "corepack pnpm@12.11.2 --parallel --filter @greendocs/web --filter @greendocs/api dev",
+    "dev": "corepack pnpm@12.11.2 --filter @greendocs/web dev",
     "dev:web": "corepack pnpm@12.11.2 --filter @greendocs/web dev",
-    "dev:api": "corepack pnpm@12.11.2 --filter @greendocs/api dev",
     "build": "corepack pnpm@12.11.2 -r --if-present build",
     "typecheck": "corepack pnpm@12.11.2 --filter @greendocs/content-schema build && corepack pnpm@12.11.2 -r --if-present typecheck",
     "test": "node --test scripts/check-module-boundaries.test.mjs scripts/check-secrets.test.mjs && corepack pnpm@12.11.2 -r --if-present test",

@@ -3,26 +3,29 @@
 **Status:** DONE
 **Depends on:** TODO 01
 
-## Goal
+## Accepted Constraints
 
-Specify controls for a user-supplied classic PAT and every operation it authorizes before implementing login or GitHub writes.
+- GitHub is the only identity provider and runtime data service.
+- GitHub Pages is static hosting; no external API, database, secret store, or cloud runtime is permitted.
+- Studio sign-in accepts a PAT, verifies the real user at GitHub `/user`, and checks write permission for the fixed repository.
+- The PAT is held only in tab memory, never browser persistence, URL, logs, telemetry, build variables, or source.
+- Studio is not linked in the public drawer. Direct access while signed out returns to public home; route hiding is UX, not authorization.
 
-## Work
+## Threats and Controls
 
-- Define PAT validation via GitHub `/user`; display the verified login and account ID, not a fabricated user.
-- Check access to the fixed repository and effective write permission; reject valid-but-unauthorized accounts.
-- Decide session storage/TTL/revocation. If PATs are retained server-side, encrypt them with managed keys and expire them; never put PATs in browser persistence or logs.
-- Keep only the short-lived app session in browser memory; require re-authentication on reload unless an approved secure same-site session arrangement is available.
-- Add strict origin/CORS allowlists, CSRF protection where cookies are used, request rate/payload limits, safe error responses, and audit event redaction.
-- Define XSS/CSP protections; any script execution on the static site can compromise an in-memory session.
-- Threat-model unauthorized repository writes, arbitrary-path writes, stale concurrent commits, malicious filenames/media, and leaked CI secrets.
+- **Fake identity:** use only GitHub's verified user response.
+- **Unauthorized repository:** require GitHub `permissions.push` for the fixed owner/repository.
+- **Wrong target or path:** hard-code owner/repository/branch and derive paths from schema-validated stable IDs.
+- **Concurrent/partial writes:** create a single Git tree/commit and update the expected branch with `force: false`; preserve drafts on conflict.
+- **Token persistence:** closure-backed memory reference only; clear on sign-out, failed authorization, GitHub 401, or tab close.
+- **XSS/dependency compromise:** no unsafe HTML; restrictive CSP; review production dependencies. Residual risk remains that any executing script can use the in-memory PAT.
+- **Over-scoped classic PAT:** tell users to use the least-privileged available token and revoke it if exposure is suspected.
+- **Content leakage:** no local persistence; public repository contents are public if the target repository is public.
 
-## Done When
+## Residual Risk
 
-- Threat model lists assets, trust boundaries, attacker capabilities, mitigations, and residual risk.
-- Secret-handling policy is testable and has no client-side PAT persistence.
-- Owner authorized the server-side encrypted, TTL-bounded PAT session design in ADR 0002; cloud IAM/TTL validation remains TODO 04.
+GitHub Pages cannot keep a PAT server-side. A malicious/compromised page script can act with the user's token during the active tab session. This risk is explicitly disclosed before use and accepted in ADR 0002 to satisfy the GitHub-only deployment requirement.
 
 ## Verification
 
-Evidence: [ADR 0002](../docs/adr/0002-pat-auth-and-session-security.md). TODOs 08 and 15 implement and execute the listed negative security tests using synthetic credentials only.
+Automated tests verify memory-only state, identity/repository permission checks, fixed-origin/path requests, 401 clearing, and non-force expected-head writes. Real browser authorization and publish tests are tracked separately; never put a production PAT in tests.

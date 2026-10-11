@@ -5,31 +5,6 @@ export interface VerifiedGithubUser {
   avatarUrl: string;
 }
 
-export interface LoginRequest {
-  pat: string;
-}
-
-export interface LoginResponse {
-  session: string;
-  user: VerifiedGithubUser;
-  expiresAt: string;
-}
-
-export interface AuthSessionResponse {
-  user: VerifiedGithubUser;
-  expiresAt: string;
-}
-
-export interface ApiError {
-  error: string;
-  requestId?: string;
-}
-
-export interface HealthResponse {
-  status: 'ok';
-  service: 'greendocs-api';
-}
-
 export interface PageRecord {
   schemaVersion: 1;
   id: string;
@@ -37,7 +12,7 @@ export interface PageRecord {
   slug: string;
   parentId: string | null;
   order: number;
-  description?: string;
+  description?: string | undefined;
 }
 
 export type StoredAttachmentKind = 'image' | 'audio' | 'video' | 'pdf';
@@ -76,11 +51,11 @@ export interface CardRecord {
   pageId: string;
   order: number;
   title: string;
-  tag?: string;
+  tag?: string | undefined;
   definition: string;
-  keyRule?: string;
-  code?: string;
-  spec?: string;
+  keyRule?: string | undefined;
+  code?: string | undefined;
+  spec?: string | undefined;
   attachments: Attachment[];
 }
 

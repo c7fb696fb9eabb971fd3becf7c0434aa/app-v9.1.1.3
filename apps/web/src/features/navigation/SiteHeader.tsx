@@ -6,7 +6,6 @@ import { Icon } from '../../components/Icon';
 
 export function SiteHeader({ onLoginIntent }: { onLoginIntent: () => void }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [logoutError, setLogoutError] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const { user, logout } = useAuth();
@@ -115,23 +114,12 @@ export function SiteHeader({ onLoginIntent }: { onLoginIntent: () => void }) {
                     className="action-button"
                     type="button"
                     onClick={async () => {
-                      setLogoutError(false);
-                      try {
-                        await logout();
-                        setIsDrawerOpen(false);
-                      } catch {
-                        setLogoutError(true);
-                      }
+                      logout();
+                      setIsDrawerOpen(false);
                     }}
                   >
                     Sign out
                   </button>
-                  {logoutError && (
-                    <p className="status-message status-error" role="alert">
-                      Sign-out could not be confirmed by the API. This browser cleared its session;
-                      the server session expires automatically.
-                    </p>
-                  )}
                 </>
               ) : (
                 <Link

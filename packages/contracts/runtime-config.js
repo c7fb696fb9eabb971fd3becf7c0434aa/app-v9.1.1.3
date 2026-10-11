@@ -1,3 +1,1 @@
 export const DEFAULT_WEB_PORT = 5173;
-export const DEFAULT_API_PORT = 8787;
-export const GITHUB_REQUEST_TIMEOUT_MS = 15_000;

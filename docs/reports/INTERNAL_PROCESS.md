@@ -1,31 +1,29 @@
-# Internal Process
+# Application Process
 
-## 1. Sign-In and Authorization
+## 1. GitHub Sign-In
 
-1. The user supplies a classic GitHub PAT over HTTPS to the API. It is never sent to the static web app's build environment or GitHub Pages.
-2. The API calls GitHub `/user` to validate the token and obtain the actual login and account ID.
-3. The API checks access to the configured owner/repository and confirms write permission. A valid token without repository write access is rejected.
-4. The API stores the PAT in server-side secret storage, encrypted at rest, with expiry/revocation controls. It issues a short-lived opaque session credential; the browser keeps that session in memory only. Reloading requires re-authentication unless a same-site session host is deliberately configured.
-5. All endpoints authorize the session and repository target server-side. Never accept arbitrary owner/repository/path values from the client.
+1. The user enters a GitHub PAT in the login page.
+2. The browser sends it directly over HTTPS to `api.github.com/user` and the fixed repository metadata endpoint.
+3. The app displays GitHub's actual login/account ID and proceeds only if the repository response grants push permission.
+4. The credential remains in a closure-backed memory reference. Sign-out, GitHub 401, or closing the tab clears access. Reload requires sign-in again.
 
 ## 2. Read and Render
 
-- The Studio requests page/card/asset records from the API, which reads the configured Git branch.
-- The public site is static: CI validates repository records and generates a versioned public content index during build. Published pages do not depend on an authenticated API at browse time.
-- A commit SHA identifies the exact content snapshot used by a preview or deployment.
+- Studio reads the configured GitHub branch ref, commit/tree, and page/card blobs.
+- Content records are validated with the shared schema; assets and hierarchy are resolved from stable IDs and explicit relationships.
+- A source commit SHA identifies the snapshot used for editing.
 
 ## 3. Edit and Publish
 
-1. GUI actions update an in-memory draft with stable record IDs; the UI shows unsaved, validated, and stale/conflict states.
-2. API validation checks schema, required fields, slug uniqueness within siblings, parent existence, ordering, attachment paths/MIME/size, and repository-owned IDs.
-3. The user reviews a change summary and confirms Publish.
-4. The API fetches the current branch head and constructs one Git tree containing the complete file batch. It creates one commit whose parent is that head, then advances the branch ref without force. This keeps page/card/asset changes atomic.
-5. If the branch head moved meanwhile, the API refuses the ref update and returns a conflict. The UI reloads and asks the user to reconcile; it never force-pushes over another user's commit.
-6. A push to `main` runs CI, builds Pages, and deploys. The UI polls workflow status and reports commit SHA, build outcome, and public URL.
+1. GUI actions update an in-memory draft; no edit is written before explicit Publish.
+2. The browser validates the page/card hierarchy, attachment references, paths, types, and size limits.
+3. The user reviews the repository, branch, base SHA, and complete mutation summary.
+4. The client checks that the branch still points to the draft's expected SHA, creates any binary blobs, then creates one Git tree and commit.
+5. It advances the branch with `force: false`. A race/non-fast-forward fails; drafts remain available for reload/reconciliation.
+6. GitHub Actions runs CI and Pages deployment for commits pushed to `main`. The UI distinguishes commit success from Pages deployment success.
 
 ## 4. Operations
 
-- Page/card delete and reorder are normal validated record updates. No destructive Git operation is silently performed.
-- Git commit history remains the audit/rollback log; local browser history is not a persistence layer.
-- API logs contain request IDs, actor ID, repository, commit SHA, and outcome only. Never log PATs, session credentials, request authorization headers, or secret environment values.
-- Rate limits, request timeouts, payload limits, idempotency keys, and GitHub API error mapping are required before enabling production writes.
+- No server-side logs, session database, external storage, or cloud runtime exists.
+- Git commit history is the audit and recovery trail; browser drafts are transient.
+- Rate limits, payload limits, fixed repository paths, schema validation, and expected-head checks apply before repository writes.

@@ -1,30 +1,28 @@
-# TODO 08: PAT Verification and API Sessions
+# TODO 08: GitHub PAT Authentication
 
 **Status:** IN PROGRESS  
 **Depends on:** TODO 03, TODO 04, TODO 07
 
 ## Goal
 
-Implement real GitHub account verification and scoped API sessions; remove fake/local sign-in entirely.
+Authenticate directly with GitHub without an app server, external identity provider, or persisted browser credential.
 
 ## Work
 
-- Add sign-in endpoint that accepts a PAT only over TLS, calls GitHub `/user`, and verifies write permission to the fixed repository.
-- Return real account identity and a short-lived app session; no synthetic users, email-only auth, OAuth callback fabrication, or developer bypass.
-- Implement session expiry, logout/revocation, rate limits, origin checks, error redaction, and backend storage/crypto exactly as approved in TODO 03.
-- Decide explicit OAuth behavior: supplied client ID is not used by PAT login; do not silently mix PAT and OAuth identity models.
-- Ensure browser code clears the PAT field after exchange and keeps only transient app session state in memory.
+- Send the user-entered PAT only to GitHub `/user` and the fixed repository endpoint over HTTPS.
+- Verify the returned GitHub login/account ID and `permissions.push` before sign-in.
+- Keep the token in a closure-backed memory reference only; clear it on failure, sign-out, or GitHub 401.
+- Never persist the credential, send it to an app backend, or place it in logs, URLs, telemetry, or build output.
+- Explain the residual XSS/dependency risk and recommend least available PAT permission.
 
 ## Done When
 
-- UI shows the verified GitHub login and repository access state.
-- Invalid/revoked/no-write identities cannot reach mutation endpoints.
-- No credential is present in web bundle, localStorage, IndexedDB, URL, analytics, or logs.
+- Invalid tokens and users without target-repo push access cannot reach Studio.
+- Signed-out direct Studio visits return to public home.
+- The real account is displayed after successful GitHub verification.
 
 ## Verification
 
-Use an isolated test account and disposable credentials. Test success, invalid, revoked, no repo access, no write access, expiry, logout, API restart/scale-out, CORS, and secret redaction. Never place real PATs in test fixtures.
+The UI suite contains one mocked successful identity/repository-permission flow. Negative token/permission cases, memory-clearing behavior, revoked-token response, and fixed-target enforcement need focused tests. Live browser acceptance requires an owner-authorized GitHub credential; never store real credentials in tests.
 
-**Local evidence:** The API verifies GitHub identity and write access to the fixed repository before creating an opaque session. Firestore stores the hashed session lookup key and KMS-encrypted PAT; application expiry and logout revocation are tested with synthetic dependencies. Browser auth keeps the session only in memory, clears it on expiry/401/logout, and never persists the PAT. API responses are no-store and use request IDs. API unit tests (19) and web tests (14) pass.
-
-**Not verified:** Live disposable-PAT cases, Cloud Run restart/scale-out, Firestore TTL, KMS/IAM, deployed CORS/TLS, and edge rate limiting require provisioned infrastructure and an isolated account.
+**Implemented locally:** GitHub `/user` and fixed repo permission verification, direct token-backed GitHub requests, memory-only token storage, sign-out/401 clearing. Real credential verification has not yet been completed in the current browser session.

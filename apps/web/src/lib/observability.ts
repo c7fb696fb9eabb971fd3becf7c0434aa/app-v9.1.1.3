@@ -1,5 +1,5 @@
 export type ClientEvent =
-  'api_failure' | 'auth_expired' | 'route_chunk_failure' | 'route_render_failure';
+  'github_auth_expired' | 'github_request_failure' | 'route_chunk_failure' | 'route_render_failure';
 export type ClientRoute = 'public-home' | 'login' | 'studio';
 
 export function reportClientEvent(

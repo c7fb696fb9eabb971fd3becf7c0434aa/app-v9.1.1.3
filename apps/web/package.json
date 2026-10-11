@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "corepack pnpm@12.11.2 --filter @greendocs/content-schema build && vite --host 0.0.0.0",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
     "@greendocs/contracts": "workspace:*",
+    "@greendocs/content-schema": "workspace:*",
     "lucide-react": "1.55.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

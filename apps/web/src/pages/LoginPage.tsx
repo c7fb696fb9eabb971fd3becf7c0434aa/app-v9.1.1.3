@@ -20,13 +20,12 @@ export function LoginPage() {
       ? requestedPath
       : APP_ROUTES.home;
   const errorMessages: Record<string, string> = {
-    auth_provider_not_configured:
-      'Secure GitHub verification is not configured for this environment yet.',
-    authentication_unavailable: 'The verification API could not be reached. Try again shortly.',
     github_token_invalid: 'GitHub rejected this token.',
     repository_write_denied: 'This GitHub account cannot write to the configured repository.',
     github_rate_limited: 'GitHub is rate-limiting verification. Wait and try again.',
-    github_verification_failed: 'GitHub verification is temporarily unavailable. Try again.',
+    github_unavailable: 'GitHub could not be reached. Check your connection and try again.',
+    github_permission_denied: 'This GitHub account cannot access the configured repository.',
+    github_request_failed: 'GitHub could not verify access. Try again shortly.',
   };
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,7 +57,7 @@ export function LoginPage() {
         Verify GitHub access
       </h1>
       <p className="login-copy">
-        The API will verify your GitHub identity and write permission for the configured repository.
+        Verify your GitHub account and write access to the configured repository.
       </p>
       <form onSubmit={handleSubmit}>
         <div className="secret-field">
@@ -96,8 +95,8 @@ export function LoginPage() {
         )}
       </form>
       <p className="status-message">
-        Your token is sent to the API for verification, cleared after the attempt, and never stored
-        in browser persistence.
+        The token stays in this tab&apos;s memory and is sent only to GitHub. It is not saved
+        between visits. Sign out or close the tab to clear it.
       </p>
       <Link className="status-message" to={APP_ROUTES.home}>
         Return to public home

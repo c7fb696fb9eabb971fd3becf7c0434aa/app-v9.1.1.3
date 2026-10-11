@@ -1,27 +1,26 @@
-# TODO 14: CI, Pages, and API Deployment
+# TODO 14: CI and GitHub Pages Deployment
 
-**Status:** NOT STARTED  
+**Status:** IN PROGRESS
 **Depends on:** TODO 04, TODO 05, TODO 06, TODO 13
 
 ## Goal
 
-Restore automated delivery for the new app and API with branch protection, validation, and secretless CI identity.
+Verify GitHub-native CI and Pages deployment for the static GitHub-only application.
 
 ## Work
 
-- Add PR workflow: frozen pnpm install, format, lint, typecheck, unit/integration/e2e tests, schema/content validation, web build, API build.
-- Add Pages workflow for `main`, correct repository base path/hash navigation behavior, artifact validation, and deployment status reporting.
-- Add separate Cloud Run API workflow using GitHub OIDC/workload identity federation; no long-lived service account key in repository secrets.
-- Configure production/staging origins, runtime secret references, CORS, health/readiness probes, and rollout/rollback procedure.
-- Require CI checks and block force-pushes on `main`.
-- Preserve only public build-time settings in web bundle; verify PAT/session secrets stay server-side.
+- CI runs frozen pnpm install, format, lint, typecheck, tests, and build.
+- Pushes to `main` build `apps/web` and deploy through GitHub Pages Actions.
+- The static app has no runtime API origin or deployment secret dependency.
+- Confirm branch protection requires CI and blocks force pushes.
+- Track the Pages run and deployed commit SHA.
 
 ## Done When
 
-- PR checks pass and cannot deploy production.
-- Main commit deploys the matching Pages artifact and API revision with traceable SHA/revision.
-- Rollback to last known-good web artifact/API revision is documented and tested.
+- Hosted CI passes for the deployed commit.
+- The matching Pages workflow succeeds and the site serves the new app.
+- Branch-protection/Pages settings are confirmed and rollback procedure is documented.
 
 ## Verification
 
-Use staging first. Test PR checks, main push, Pages URL/base path, API health/auth, failed-build block, deployment status, and rollback. Do not claim deployment complete from workflow dispatch alone.
+**Verified (previous version):** commit `5fec74cd927446cad6dde30735a0c8786e96c575` passed CI and Pages deployment. The app shell returned HTTP 200. Current direct-GitHub auth changes are uncommitted and have not been deployed. Studio does not yet display the matching Actions/Pages run result.

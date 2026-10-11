@@ -16,21 +16,7 @@
       }
     },
     {
-      "label": "GreenDocs: API debug server",
-      "type": "shell",
-      "command": "corepack pnpm@12.11.2 --filter @greendocs/api dev:debug",
-      "isBackground": true,
-      "problemMatcher": {
-        "pattern": { "regexp": ".*", "message": 1 },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": ".*Debugger listening on",
-          "endsPattern": "GreenDocs API listening on .*"
-        }
-      }
-    },
-    {
-      "label": "GreenDocs: dev servers",
+      "label": "GreenDocs: dev server",
       "type": "shell",
       "command": "corepack pnpm@12.11.2 dev",
       "isBackground": true,

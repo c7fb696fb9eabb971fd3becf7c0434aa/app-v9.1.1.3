@@ -1,19 +1,17 @@
 # GreenDocs
 
-Git-backed documentation authoring and publishing workspace. GitHub is the durable source of truth; the public site is a static build and the protected Studio is reached by direct URL after real GitHub PAT verification.
+Git-backed documentation authoring and publishing workspace. GitHub is the sole identity provider, content store, source-control host, and deployment platform.
 
 ## Workspace
 
-- `apps/web`: Vite/React public site and protected Studio UI (GitHub Pages).
-- `apps/api`: Node/Hono API for GitHub verification and repository operations (Cloud Run).
-- `packages/contracts`: shared API contracts.
-- `packages/content-schema`: validated Git-backed page/card/asset records.
-- `docs/COLOR_SYSTEM.md`: retained visual design source.
-- `TODO/`: ordered implementation backlog and acceptance checks.
+- `apps/web`: Vite/React public site and protected Studio UI, deployed to GitHub Pages.
+- `packages/contracts`: shared record and publish contracts.
+- `packages/content-schema`: page/card/asset validation and storage-path rules.
+- `TODO/`: implementation backlog and acceptance checks.
 
 ## Local Commands
 
-Use the project-pinned package manager with Corepack, especially on this machine where a separate WinGet pnpm shim is earlier on PATH:
+Use the project-pinned package manager with Corepack:
 
 ```powershell
 corepack pnpm@12.11.2 install
@@ -24,10 +22,10 @@ corepack pnpm@12.11.2 test
 corepack pnpm@12.11.2 build
 ```
 
-Cloud Run/Firestore/KMS credentials are not present in the current environment. Local development must fail clearly when required secure authentication providers are not configured; never replace real verification with fake login.
+The browser verifies the user by calling GitHub's `/user` API with the PAT, checks push permission on the fixed repository, and uses the token for GitHub Git Database API reads and atomic commits. The token is held only in the active tab's memory; it is not persisted and is cleared on sign-out, API rejection, or tab close. Reloading requires signing in again.
 
-The API validates PAT identity and repository write access with GitHub before issuing a short-lived opaque session. Production sessions require Firestore and Cloud KMS configuration; the browser retains the session in memory only. Repository snapshot/publish requests are session-protected, uncached, bound to the configured repository, and publishes require an idempotency key.
+**Security trade-off:** this GitHub-only design necessarily exposes the entered PAT to JavaScript running in the page while signed in. Any XSS or compromised dependency could act with that token's GitHub permissions. Use a dedicated token with the least available repository scope, do not use an account-wide token unnecessarily, sign out after editing, and revoke the token in GitHub if it may be compromised. GitHub Pages cannot provide a server-side secret boundary.
 
 ## Deployment
 
-Pushes to `main` run CI and independently build/deploy the web application to GitHub Pages using `.github/workflows/deploy-pages.yml`. The workflow deploys only `apps/web`; it does not deploy the API or configure its Cloud Run, Firestore, KMS, or CORS resources. Configure the repository Actions variable `VITE_API_BASE_URL` with the deployed API origin to enable browser-to-API requests. Until the API is deployed and securely configured, Studio authentication and publishing are unavailable on the hosted site.
+Pushes to `main` run CI and deploy `apps/web` to GitHub Pages through `.github/workflows/deploy-pages.yml`. There is no separate API service, Cloud project, external database, or API-origin setting.

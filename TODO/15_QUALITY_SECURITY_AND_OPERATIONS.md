@@ -9,12 +9,12 @@ Prove the entire system meets security, correctness, accessibility, observabilit
 
 ## Work
 
-- Complete unit, API integration, repository adapter, UI, browser E2E, and deployment smoke tests.
-- Add negative security suite: PAT redaction, unauthorized repo/path, expired/revoked session, CORS/CSRF, XSS/CSP, path traversal, MIME/size abuse, race/conflict, rate limit.
-- Add structured logs with request ID, verified actor ID, repo, commit SHA, deployment result; redact all secrets.
-- Add health/readiness endpoints, metrics for login failures, GitHub API failures/rate limits, commit errors, workflow duration, deployment status.
+- Complete schema, GitHub-client, UI, browser E2E, and deployment acceptance tests.
+- Add negative security suite: PAT absence from persistence/bundles, unauthorized repo/path, revoked token, XSS/CSP, path traversal, MIME/size abuse, race/conflict, rate limit.
+- Keep client diagnostics limited to non-secret event names/status codes; never log tokens or repository content.
+- Define GitHub API failure, Actions workflow, and Pages deployment diagnostics and support guidance.
 - Add accessibility checks, responsive screenshot suite, reduced-motion checks, and performance/bundle budgets.
-- Document incident response, PAT revocation, session invalidation, backup/recovery, rollback, and owner runbook.
+- Document incident response, PAT revocation, tab-memory auth clearing, Git recovery, Pages rollback, and owner runbook.
 
 ## Done When
 

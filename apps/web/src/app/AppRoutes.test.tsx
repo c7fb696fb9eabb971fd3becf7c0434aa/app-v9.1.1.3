@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../features/auth';
 import { AppRoutes } from './AppRoutes';
+import { GITHUB_API_ORIGIN, GITHUB_REPOSITORY } from '../../config';
 
 function renderAt(path: string) {
   return render(
@@ -43,11 +44,9 @@ describe('public route and drawer', () => {
     expect(menu).toHaveFocus();
   });
 
-  it('redirects a direct Studio route to PAT login when signed out', async () => {
+  it('redirects a direct Studio route to the public home when signed out', async () => {
     renderAt('/studio');
-    expect(
-      await screen.findByRole('heading', { name: 'Verify GitHub access' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Secret Studio' })).not.toBeInTheDocument();
   });
 
@@ -62,41 +61,51 @@ describe('public route and drawer', () => {
     expect(token).toHaveAttribute('type', 'text');
   });
 
-  it('returns a verified user to the directly requested Studio route', async () => {
-    const fakeSession = {
-      session: 's'.repeat(43),
-      user: {
-        id: '123',
-        login: 'verified-user',
-        name: null,
-        avatarUrl: 'https://avatars.example.test/123',
-      },
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-    };
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(fakeSession), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
+  it('verifies GitHub identity and repository write permission before sign-in', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 123,
+            login: 'verified-user',
+            name: null,
+            avatar_url: 'https://avatars.example.test/123',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ permissions: { push: true } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     try {
-      renderAt('/studio');
-      await screen.findByRole('heading', { name: 'Verify GitHub access' });
+      renderAt('/login');
       fireEvent.change(screen.getByLabelText('GitHub classic personal access token'), {
         target: { value: 'synthetic-test-token' },
       });
       fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
 
-      expect(await screen.findByRole('heading', { name: 'Secret Studio' })).toBeInTheDocument();
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/auth/login',
+      expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        `${GITHUB_API_ORIGIN}/user`,
         expect.objectContaining({
-          method: 'POST',
           cache: 'no-store',
-          body: JSON.stringify({ pat: 'synthetic-test-token' }),
+          credentials: 'omit',
+          headers: expect.any(Headers),
         }),
       );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        `${GITHUB_API_ORIGIN}/repos/${GITHUB_REPOSITORY.owner}/${GITHUB_REPOSITORY.name}`,
+        expect.objectContaining({ cache: 'no-store', credentials: 'omit' }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
+      expect(screen.getByText(/Signed in as/)).toHaveTextContent('verified-user');
     } finally {
       vi.unstubAllGlobals();
     }

@@ -1,33 +1,34 @@
-# ADR 0002: Classic PAT Authentication and Session Security
+# ADR 0002: GitHub PAT Authentication in a Static App
 
-**Status:** Proposed baseline; cloud controls require TODO 04 verification  
-**Date:** 2026-10-10
-
-## Context
-
-The user requires actual GitHub account verification with a classic PAT, repository write authorization, and no credential/content persistence in browser storage. GitHub Pages and the Cloud Run API are different origins, so cross-site cookies are not a reliable sole session transport.
+**Status:** Accepted with documented residual risk
+**Date:** 2026-10-11
 
 ## Decision
 
-1. The browser sends the entered PAT once over TLS to the API auth endpoint. It is never written to web build config, URL, local storage, IndexedDB, Cache API, analytics, or logs.
-2. The API validates the PAT using GitHub `/user`, obtains the actual login/account ID, reads the fixed repository metadata with the PAT, and verifies the account has effective write access. Valid identity without target-repo write permission is rejected.
-3. The token is encrypted at rest with Cloud KMS and stored in a TTL-bounded Firestore session record. Store a hash of the opaque session ID for lookup; retain only encrypted PAT, account ID, target repo binding, issued/expiry time, and audit metadata. TODO 04 must confirm KMS/Firestore IAM, TTL, cost, and region.
-4. Generate a cryptographically random opaque bearer session ID. Return it only after successful validation. The browser keeps it in volatile memory and sends it in the API Authorization header. Reload requires PAT re-entry. Logout/expiry deletes or revokes the session. Do not use an unencrypted long-lived browser cookie across `github.io` and `run.app`.
-5. Every protected endpoint checks session expiry, account binding, and the fixed repo/branch. The server ignores client attempts to choose another owner, repo, branch, or raw path.
-6. Restrict CORS to configured local/staging/production origins; use TLS, strict CSP, input/output schemas, request-size limits, rate limits, and safe error mapping. Bearer API calls do not use ambient cookies, reducing CSRF risk; strict Origin checks remain defense in depth.
-7. A classic PAT may be broader than a fine-grained token. Require the minimum available classic scopes needed for repository operations, show the actual verified account/repo permission, and document revocation. Do not claim that a classic PAT is repo-scoped if its GitHub scope grants wider account access.
-8. Redact PATs/session IDs/Authorization headers from application, proxy, exception, and CI logs. Never return the PAT after sign-in. Session compromise handling invalidates app sessions; PAT revocation remains the user's GitHub action.
+1. The user enters a GitHub PAT in the sign-in page. The SPA sends it only to `https://api.github.com/user` and the fixed repository metadata endpoint over HTTPS.
+2. The app displays the actual GitHub login and account ID returned by `/user`, and admits the user only when GitHub reports push permission on the configured repository.
+3. The token is kept in a closure-backed JavaScript memory reference while the tab remains open. It is cleared after failed sign-in, sign-out, or a GitHub 401. There is no app session, cookie, localStorage, IndexedDB, Cache API, URL, analytics, or application server.
+4. Every GitHub request goes to a fixed GitHub API origin and fixed repository path. No caller-provided owner, repository, branch, or arbitrary file path is accepted.
+5. Repository records and media are read and written through GitHub Git Database endpoints. Publish creates one tree and one commit, then updates the expected branch without force.
+6. The login screen discloses that page JavaScript can access the PAT while the user is signed in. Recommend least-privilege token scope, sign-out after use, and GitHub revocation if exposure is suspected.
 
 ## Threats and Controls
 
-- **Fake identity:** only GitHub `/user` response establishes identity; never synthesize a user object.
-- **Wrong account/repo:** server-fixed repo plus explicit permission check on every write session.
-- **PAT theft from browser storage/logs:** PAT leaves the browser after exchange; short-lived opaque session is memory-only; redaction tests.
-- **Cross-site request:** bearer header, origin allowlist, no ambient cookie authority, schema validation.
-- **XSS:** strict CSP, no unsafe HTML, output escaping, dependency/security review; an active XSS can still use an in-memory session, so limit expiry and scope.
-- **Session database disclosure:** encrypted PAT via KMS; store a hash of session ID; TTL and IAM least privilege.
-- **Concurrent/forged write:** fixed allowed repository/path mapping, schema validation, expected-head commit, non-force ref update.
+- **Fake identity:** only GitHub `/user` response establishes account identity.
+- **Wrong account/repository:** compare verified identity and require push permission on the fixed repository before retaining the token.
+- **PAT persistence/leakage:** volatile memory only; no URLs, browser persistence, logs, metrics, or bundles.
+- **XSS/dependency compromise:** a running script can use the in-memory PAT. Restrict dependencies, avoid unsafe HTML, retain strict CSP, and state this residual risk plainly.
+- **Unintended repository writes:** schema/path validation, explicit review, one complete Git tree/commit, expected-head check, and non-force ref update.
+- **Concurrent commits:** GitHub rejects non-fast-forward ref updates; preserve the draft and require a reload/reconcile.
+- **Invalid/revoked credential:** clear in-memory authentication on GitHub 401 and return to public home.
 
-## Verification Requirements
+## Consequences
 
-Automated tests use synthetic credentials or a disposable GitHub test repository. Test invalid/revoked PAT, wrong user, no repo access, no write role, expired/revoked app session, origin rejection, no secret in logs/storage/bundle, session deletion on logout, and token encryption/decryption failure. A production credential is never a test fixture.
+- This is the only current implementation that satisfies static GitHub Pages plus GitHub-only auth/data without an external runtime.
+- A classic PAT can be broader than one repository. The application cannot reduce scopes already granted by GitHub.
+- Reloading loses authentication; drafts are memory-only and are lost on reload.
+- GitHub API availability, rate limits, CORS behavior, repository permissions, and Actions/Pages availability are runtime dependencies.
+
+## Verification
+
+Test real browser sign-in against GitHub, push permission denial, revoked credentials, read/publish round-trip on an explicitly approved test target, stale-head conflict, sign-out, reload, and token absence from persistence/logs/bundles. Never include a production PAT in fixtures or commit it.

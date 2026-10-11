@@ -11,22 +11,21 @@ Implement the requested public-home -> right drawer -> login -> verified session
 
 - Set public route at the exact GitHub Pages base with hash routes compatible with static hosting.
 - Implement public home and right sidebar with public navigation, Login action, signed-in identity, and sign-out. Do not include a Secret Studio link or button.
-- Implement PAT login form with show/hide, submit progress, validation, accessible errors, and server-auth result.
-- After verified login, preserve an authorized requested return path so a user who opened the direct Studio URL can continue there.
-- Protect Studio routes by verified API session and redirect to login with a safe return path.
+- Implement PAT login form with show/hide, submit progress, validation, accessible errors, and verified GitHub identity/permission result.
+- Protect Studio routes by verified GitHub memory auth and return signed-out direct visits to public home.
 - Remove signup/email/instant-developer fake access and ensure the OAuth client ID is not mistaken for PAT verification.
 
 ## Done When
 
 - Signed-out user can visit public home and enter login from the right sidebar; the sidebar never exposes Secret Studio.
-- Sign-in only succeeds when backend verifies the real user and repo write access.
-- The authorized user can open the documented direct Studio URL; an unauthenticated or unauthorized user cannot access it or its API.
-- Refresh/logout/expiry return to a correct signed-out state; unauthorized routes never flash protected content.
+- Sign-in only succeeds after GitHub verifies the real user and repository push permission.
+- The authorized user can open the documented direct Studio URL; a signed-out visit returns home without rendering Studio.
+- Refresh/logout/revocation return to a signed-out state; unauthorized routes never flash protected content.
 
 ## Verification
 
 Browser tests for public home, drawer navigation, successful and rejected login, deep link to Studio, expiry, logout, refresh re-auth, keyboard, and mobile layout.
 
-**Local evidence:** Public home/navigation, PAT show/hide and submission states, direct Studio deep-link return, in-memory session handling, logout, expiry/401 behavior, and accessible drawer interactions are implemented. Synthetic web/API tests pass (14 web, 19 API).
+**Local evidence:** Public home, PAT show/hide, mocked successful GitHub verification, direct Studio home redirect, memory-only auth, sign-out/401 clearing, and drawer interactions are implemented. Workspace tests pass, but they do not constitute live GitHub acceptance.
 
-**Not verified:** No live PAT or staging account was used. Full browser mobile/refresh behavior against a deployed API remains outstanding.
+**Not verified:** Live PAT sign-in and Studio CRUD remain to be verified against the direct GitHub implementation.

@@ -1,55 +1,45 @@
-# ADR 0001: GreenDocs System Architecture
+# ADR 0001: GitHub-Only GreenDocs Architecture
 
-**Status:** Proposed baseline for implementation  
-**Date:** 2026-10-10  
-**Owners:** Product owner and implementation team
+**Status:** Accepted
+**Date:** 2026-10-11
 
 ## Context
 
-The public app must remain on the supplied GitHub Pages URL, while authorized users must edit content and commit it to the supplied repository. GitHub Pages is static hosting and cannot keep a PAT secret or safely perform privileged GitHub writes. The UI needs independent public and Studio routes, ID-based data rather than filename-driven hierarchy, and an auditable commit/deploy path.
+GreenDocs must use GitHub for identity, repository data, source control, and hosting. GitHub Pages is static hosting and cannot keep a PAT secret or run an authenticated backend. Adding Cloud Run, Firestore, Cloud KMS, or another API provider violates the product constraint.
 
 ## Decision
 
-1. `apps/web` is a React/Vite static SPA deployed to GitHub Pages. Hash routing preserves the required repository subpath URL.
-2. `apps/api` is a TypeScript Node service deployed to Cloud Run. It is the only runtime component permitted to call GitHub write APIs.
-3. Git is the durable source of truth. Pages, cards, and attachment metadata are versioned JSON records addressed by stable IDs. The web build generates a public read index from a commit snapshot.
-4. `content/pages/<id>.json`, `content/cards/<id>.json`, and an initially bounded `content/media/` area are the proposed layout. Titles/slugs never become identity or trusted paths.
-5. The API uses GitHub Git Database operations to write all validated batch changes as one commit. The commit parent must equal the branch head observed for the draft; ref update is non-force. A moved head returns a conflict.
-6. Secret Studio is a separate lazy route reached by direct URL only. It does not appear in the public right drawer. The server independently enforces authentication and repo permission; route secrecy is not authorization.
-7. PAT is exchanged for a short-lived opaque session. The API retains a short-lived encrypted PAT/session record in Firestore with TTL, encrypted via Cloud KMS; the browser retains only the opaque session in memory. Reload requires reauthentication. This avoids cross-site cookies between `github.io` and `run.app`.
-8. Public immutable assets can be cached by content hash. Authenticated API responses use `Cache-Control: no-store`. The application does not persist drafts, content, or credentials in localStorage, IndexedDB, or Cache API. Browser/Pages CDN caching of public static assets cannot be fully disabled or controlled by a client-side app.
-9. `main` pushes run content/schema validation, tests, web build, Pages deploy, and separate API release steps. CI uses workload identity federation, not long-lived cloud keys.
+1. `apps/web` is a React/Vite static SPA deployed to the supplied GitHub Pages URL. Hash routing supports the repository subpath.
+2. GitHub is the only runtime identity/data service. The browser sends a user-entered PAT over HTTPS directly to `api.github.com`; no application API or proxy receives it.
+3. Sign-in verifies `/user` and `permissions.push` for the fixed `c7fb696fb9eabb971fd3becf7c0434aa/app-v9.1.1.3` repository. Only a verified identity can enter Studio.
+4. The PAT is held in a closure-backed memory reference while the tab is open. It is not placed in React-rendered values, browser persistence, URLs, analytics, source, or build configuration. Sign-out and a GitHub 401 clear it. Reload requires reauthentication.
+5. The browser reads the repository Git tree and validated records directly from GitHub. Page/card/media files are stored under stable-ID paths in the Git repository.
+6. Publish validates the complete draft, checks the expected branch head, creates blobs/tree/commit, and advances the fixed branch with `force: false`. Concurrent branch updates fail rather than being overwritten. GitHub commit history is the audit and recovery record.
+7. GitHub Actions runs CI and deploys the static app to GitHub Pages. The workflow uses GitHub's Pages artifact/deploy actions and does not deploy or call an external service.
+8. Draft content and media bytes stay in tab memory until publish. Authenticated GitHub responses use `no-store`; public immutable assets and Pages bundles may be CDN-cached.
+9. Unauthenticated direct Studio navigation returns to the public home; the explicit GitHub sign-in action remains available in the public navigation.
 
-## Module Ownership and Dependencies
+## Security Consequence
 
-| Module | Owner and public surface | Allowed dependencies | Prohibited dependencies |
-|---|---|---|---|
-| `apps/web/src/app` | App shell, providers, route composition, protected-route gate | Page entrypoints and feature public barrels | Feature private files, API server source |
-| `apps/web/src/pages` | Route-level public home, login, and Studio page views | App contracts and feature public barrels | GitHub adapter, storage details, other page internals |
-| `apps/web/src/features/auth` | Volatile browser auth state; `index.ts` is the public API | Shared contracts and browser APIs | API implementation, browser persistence, other feature internals |
-| `apps/web/src/features/navigation` | Header and right-side navigation; `index.ts` is the public API | Auth public API and app route config | Auth private files, API implementation |
-| `apps/web/src/app/styles.css` | Current shared design tokens and primitives | CSS platform | Product state and server modules |
-| `apps/web/src/test` | Shared test cleanup and environment setup | Test framework | Production modules |
-| `apps/api/src` | API composition, runtime config, and server entry | Shared contracts and server-only capabilities | Web source and browser state |
-| `packages/contracts` | Shared request/response types, endpoint and local runtime constants | Platform types only | Any app implementation |
-| `packages/content-schema` | Reserved owner for validated content records (TODO 06) | Shared contracts and schema library | App and API implementations |
+There is no server-side secret boundary in this architecture. While signed in, any script executing in the page can use the PAT. Restrict dependencies, avoid unsafe HTML, keep CSP restrictive, recommend least-privilege credentials, never persist or log credentials, clear them promptly, and clearly disclose the residual XSS/supply-chain risk. A PAT must never be embedded in the deployed bundle.
 
-Browser features expose only deliberate barrels. The boundary checker at `scripts/check-module-boundaries.mjs` parses TypeScript/TSX imports, rejects web-to-server dependencies and direct cross-feature implementation imports, and reports cycles in the local app graph. `lint` and `test` run that check in CI.
+## Module Ownership
 
-The GitHub adapter, page/card/assets, publishing, design-system component library, and route-level lazy-loading modules are future capabilities; they are not claimed to exist in this scaffold. Their owners and allowed dependencies are defined by the dependent TODOs before implementation.
+| Module | Responsibility |
+|---|---|
+| `apps/web/src/features/auth` | Verify GitHub identity/repository permission and hold the PAT in memory only |
+| `apps/web/src/features/github` | Fixed-repository GitHub API reads and atomic Git commits |
+| `apps/web/src/features/studio` | In-memory drafts, validation, review, and explicit publish |
+| `packages/contracts` | Shared record and publish types |
+| `packages/content-schema` | Record validation and safe storage-path construction |
+| `.github/workflows` | CI and Pages deployment only |
 
-## Consequences
-
-- Adds Cloud Run, Firestore TTL storage, and Cloud KMS configuration to the delivery surface; TODO 04 must verify access/quota/cost before implementing the session store.
-- PATs remain server-side; API outages prevent authoring but do not prevent reading the last deployed static site.
-- Public reading is commit-snapshot-based; Studio obtains live drafts from the API.
-- API/auth framework selection and media storage thresholds remain explicit TODO 06/08 decisions; do not invent them in components.
-- Existing Pages deployment workflow was removed during the repository reset and must be recreated before the next production site update.
+Feature imports use public barrels. The browser must not depend on server code or accept client-selected repository targets.
 
 ## Alternatives Rejected
 
-- PAT in Vite env, browser storage, source, or commit: leaks a repo-write credential.
-- Browser-to-GitHub write calls: exposes PAT and duplicates authorization logic.
-- Filename/directory names as record identity: couples hierarchy changes to paths and creates naming conflicts.
-- Hidden Studio link as security: direct URLs remain reachable; enforce server authorization.
-- Force-push or per-file commits: risks overwrite and partially applies page/card/asset batches.
+- External API/cloud/database: violates the GitHub-only requirement.
+- PAT in a build variable, URL, source, localStorage, IndexedDB, or logs: leaks credentials.
+- Fake OAuth identity or treating a public OAuth client ID as a secret: does not authenticate a user.
+- Per-file commits or force-updated branch refs: permit partial writes or overwrite concurrent work.
+- Hidden Studio route as authorization: the GitHub token and repository permission checks remain mandatory.

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { API_PATHS } from '@greendocs/contracts/api-paths';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type {
   Attachment,
   CardRecord,
@@ -10,6 +9,7 @@ import type {
 } from '@greendocs/contracts';
 import { CONTENT_LIMITS } from '@greendocs/contracts/content-policy';
 import { useAuth } from '../auth';
+import { createGitHubRepositoryClient } from '../github';
 import { Button, Dialog, EmptyState, TextInput } from '../../components/Primitives';
 import {
   attachmentAssetKey,
@@ -33,57 +33,22 @@ import {
   type PageNode,
 } from './model';
 
-const FORMAT_ERROR = 'The repository returned a response that could not be read.';
-
-function asObject(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
-}
-
 function mutationCandidates(mutations: readonly AssetMutation[]): Set<string> {
   return new Set(mutations.map((mutation) => `${mutation.id}:${mutation.mimeType}`));
-}
-
-function validateSnapshot(value: unknown): value is RepositorySnapshotResponse {
-  const result = asObject(value);
-  const repository = asObject(result?.repository);
-  return (
-    typeof result?.sourceCommit === 'string' &&
-    /^[0-9a-f]{40}$/.test(result.sourceCommit) &&
-    Array.isArray(result.pages) &&
-    Array.isArray(result.cards) &&
-    Array.isArray(result.assetPaths) &&
-    result.assetPaths.every((path) => typeof path === 'string') &&
-    typeof repository?.owner === 'string' &&
-    typeof repository.name === 'string' &&
-    typeof repository.branch === 'string'
-  );
-}
-
-async function responseError(response: Response): Promise<string> {
-  try {
-    const body = asObject(await response.json());
-    return typeof body?.error === 'string' ? body.error : `http_${response.status}`;
-  } catch {
-    return `http_${response.status}`;
-  }
 }
 
 function friendlyError(error: unknown): string {
   const code = error instanceof Error ? error.message : 'unknown_error';
   const messages: Record<string, string> = {
-    authentication_required: 'Your session expired. Sign in again to continue.',
-    auth_provider_not_configured:
-      'Secure GitHub access is not configured on this API. No repository changes were made.',
-    api_unavailable: 'The API could not be reached. Your draft remains in this browser.',
+    authentication_required: 'Sign in with GitHub to continue.',
+    github_unavailable: 'GitHub could not be reached. Your draft remains in this browser.',
     repository_head_changed:
       'The repository changed after this draft was loaded. Your draft is preserved; reload the repository and reconcile before publishing.',
-    github_token_invalid: 'GitHub rejected the session token. Sign in again.',
-    github_permission_denied: 'The connected GitHub account cannot write to this repository.',
+    github_token_invalid: 'GitHub rejected the token. Sign in again.',
     github_rate_limited: 'GitHub is rate-limiting requests. Wait before trying again.',
-    invalid_repository_mutation:
-      'The API rejected this batch. Review page, card, and asset references.',
-    publish_idempotency_not_configured:
-      'Safe publish retry protection is not configured. No repository changes were made.',
+    github_permission_denied: 'The connected GitHub account cannot access this repository.',
+    invalid_content_relationships: 'The draft has invalid page, card, or asset references.',
+    invalid_mutation_count: 'This publish batch contains an unsupported number of changes.',
   };
   return messages[code] ?? `The request failed (${code}). Your unsaved draft has been preserved.`;
 }
@@ -301,7 +266,7 @@ function PageTree({
 }
 
 export function StudioWorkspace() {
-  const { apiRequest, user } = useAuth();
+  const { githubRequest, user } = useAuth();
   const [baseSnapshot, setBaseSnapshot] = useState<RepositorySnapshotResponse | null>(null);
   const [pages, setPages] = useState<PageRecord[]>([]);
   const [cards, setCards] = useState<CardRecord[]>([]);
@@ -324,15 +289,14 @@ export function StudioWorkspace() {
   const [commitMessage, setCommitMessage] = useState('Update GreenDocs content');
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState('');
   const [lastCommit, setLastCommit] = useState<PublishResponse | null>(null);
-  const publishAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const repositoryClient = useMemo(
+    () => createGitHubRepositoryClient(githubRequest),
+    [githubRequest],
+  );
 
   const refreshSnapshot = useCallback(async () => {
-    const response = await apiRequest(API_PATHS.repositorySnapshot);
-    if (!response.ok) throw new Error(await responseError(response));
-    const body: unknown = await response.json();
-    if (!validateSnapshot(body)) throw new Error(FORMAT_ERROR);
-    return body;
-  }, [apiRequest]);
+    return repositoryClient.readSnapshot();
+  }, [repositoryClient]);
 
   const loadSnapshot = useCallback(async () => {
     setLoading(true);
@@ -690,44 +654,15 @@ export function StudioWorkspace() {
       return;
     }
     const body = { ...request, message: commitMessage.trim() };
-    const fingerprint = JSON.stringify(body);
-    if (publishAttempt.current?.fingerprint !== fingerprint) {
-      publishAttempt.current = { fingerprint, key: crypto.randomUUID() };
-    }
     setSaving(true);
     setError(null);
     try {
-      const response = await apiRequest(API_PATHS.repositoryPublish, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': publishAttempt.current.key,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        const code = await responseError(response);
-        if (code === 'repository_head_changed') publishAttempt.current = null;
-        throw new Error(code);
-      }
-      const result: unknown = await response.json();
-      const resultObject = asObject(result);
-      if (
-        typeof resultObject?.commitSha !== 'string' ||
-        typeof resultObject.commitUrl !== 'string'
-      ) {
-        throw new Error(FORMAT_ERROR);
-      }
-      const committed = {
-        commitSha: resultObject.commitSha,
-        commitUrl: resultObject.commitUrl,
-      };
+      const committed = await repositoryClient.publish(body);
       setLastCommit(committed);
       setReviewOpen(false);
       setNotice(
         `Commit ${committed.commitSha} was created. Deployment status is not yet confirmed.`,
       );
-      publishAttempt.current = null;
       try {
         const fresh = await refreshSnapshot();
         setBaseSnapshot(fresh);

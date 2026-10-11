@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { APP_ROUTES } from '../../config';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isCheckingSession } = useAuth();
-  const location = useLocation();
 
   if (isCheckingSession) {
     return (
@@ -16,7 +15,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to={APP_ROUTES.login} state={{ from: location.pathname }} replace />;
+    return <Navigate to={APP_ROUTES.home} replace />;
   }
 
   return children;
