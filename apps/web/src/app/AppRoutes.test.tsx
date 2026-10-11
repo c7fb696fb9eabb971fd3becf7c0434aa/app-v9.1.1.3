@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../features/auth';
@@ -38,12 +38,54 @@ describe('public route and drawer', () => {
   it('offers login in the right drawer and does not expose Studio navigation', async () => {
     renderAt('/');
     fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
+    const drawer = screen.getByRole('dialog', { name: 'Right navigation' });
+    expect(drawer.querySelector('.right-sidebar-header')).toBeInTheDocument();
+    expect(drawer.querySelector('.right-sidebar-content')).toBeInTheDocument();
+    expect(drawer.querySelector('.right-sidebar-footer')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Log in with GitHub' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /secret studio/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: 'Log in with GitHub' }));
-    expect(
-      await screen.findByRole('heading', { name: 'Verify GitHub access' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Authenticate' })).toBeInTheDocument();
+  });
+
+  it('opens and closes the independent left sidebar without exposing login', () => {
+    renderAt('/');
+    const leftControl = screen.getByRole('button', { name: 'Open left sidebar' });
+    fireEvent.click(leftControl);
+    expect(screen.getByRole('dialog', { name: 'Left sidebar' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Right navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Log in with GitHub' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(leftControl).toHaveFocus();
+    expect(screen.queryByRole('dialog', { name: 'Left sidebar' })).not.toBeInTheDocument();
+  });
+
+  it('uses the shared brand home link in both sidebars and closes the selected sidebar', () => {
+    renderAt('/');
+    fireEvent.click(screen.getByRole('button', { name: 'Open left sidebar' }));
+    const leftBrand = within(screen.getByRole('dialog', { name: 'Left sidebar' })).getByRole(
+      'link',
+      { name: 'GreenDocs home' },
+    );
+    expect(leftBrand).toHaveAttribute('href', '/');
+    fireEvent.click(leftBrand);
+    expect(screen.queryByRole('dialog', { name: 'Left sidebar' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
+    const rightBrand = within(screen.getByRole('dialog', { name: 'Right navigation' })).getByRole(
+      'link',
+      { name: 'GreenDocs home' },
+    );
+    expect(rightBrand).toHaveAttribute('href', '/');
+    fireEvent.click(rightBrand);
+    expect(screen.queryByRole('dialog', { name: 'Right navigation' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the right navigation drawer independently controlled', () => {
+    renderAt('/');
+    fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
+    expect(screen.getByRole('dialog', { name: 'Right navigation' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Left sidebar' })).not.toBeInTheDocument();
   });
 
   it('contains focus in the navigation drawer and restores it after Escape', () => {
@@ -51,7 +93,7 @@ describe('public route and drawer', () => {
     const menu = screen.getByRole('button', { name: 'Open right navigation' });
     fireEvent.click(menu);
     expect(screen.getByRole('dialog', { name: 'Right navigation' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Close navigation' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Close right navigation' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Right navigation' })).not.toBeInTheDocument();
     expect(menu).toHaveFocus();
@@ -152,10 +194,10 @@ describe('public route and drawer', () => {
     vi.stubGlobal('fetch', fetchMock);
     try {
       renderAt('/login', true);
-      fireEvent.change(screen.getByLabelText('GitHub classic personal access token'), {
+      fireEvent.change(screen.getByLabelText('Personal Access Token'), {
         target: { value: 'synthetic-test-token' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
 
       expect(await screen.findByRole('heading', { name: 'Home' })).toBeVisible();
       expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
@@ -165,6 +207,14 @@ describe('public route and drawer', () => {
       expect(await screen.findByRole('heading', { name: 'Getting started' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Installation' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Install the app' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
+      const rightBrand = within(screen.getByRole('dialog', { name: 'Right navigation' })).getByRole(
+        'link',
+        { name: 'GreenDocs home' },
+      );
+      expect(rightBrand).toHaveAttribute('href', '/home');
+      fireEvent.click(rightBrand);
+      expect(screen.queryByRole('dialog', { name: 'Right navigation' })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Go to public route' }));
       expect(await screen.findByLabelText('Current test route')).toHaveTextContent('/home');
       expect(fetchMock).toHaveBeenCalledWith(
@@ -178,13 +228,46 @@ describe('public route and drawer', () => {
 
   it('loads the PAT page on demand and provides an accessible token visibility control', async () => {
     renderAt('/login');
+    expect(await screen.findByRole('heading', { name: 'Authenticate' })).toBeInTheDocument();
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveClass('login-main');
     expect(
-      await screen.findByRole('heading', { name: 'Verify GitHub access' }),
+      screen.getByRole('region', { name: 'Authenticate' }).closest('.login-shell'),
+    ).not.toBeNull();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText(/token stays in this tab's memory/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Authenticate with your account in order to push & commit files to the configured repository.',
+      ),
     ).toBeInTheDocument();
-    const token = screen.getByLabelText('GitHub classic personal access token');
+    const token = screen.getByLabelText('Personal Access Token');
     expect(token).toHaveAttribute('type', 'password');
-    fireEvent.click(screen.getByRole('button', { name: 'Show personal access token' }));
+    const visibilityToggle = screen.getByRole('button', { name: 'Show personal access token' });
+    expect(visibilityToggle.textContent).toBe('');
+    expect(visibilityToggle.querySelector('svg')).toBeInTheDocument();
+    expect(token.parentElement).toHaveClass('login-input-control');
+    expect(token.parentElement).toContainElement(visibilityToggle);
+    fireEvent.click(visibilityToggle);
     expect(token).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('button', { name: 'Hide personal access token' })).toHaveTextContent(
+      '',
+    );
+    expect(screen.getByRole('link', { name: 'Return to Home Page' })).toHaveClass(
+      'login-home-link',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Return to Home Page' }).querySelector('.login-home-arrow'),
+    ).toBeInTheDocument();
+    const futureSignInButtons = [
+      'Continue with Google',
+      'Continue with GitHub',
+      'Continue with ChatGPT',
+      'Continue with SAML SSO',
+      'Continue with Passkey',
+    ].map((name) => screen.getByRole('button', { name }));
+    expect(futureSignInButtons).toHaveLength(5);
+    futureSignInButtons.forEach((button) => expect(button).toBeDisabled());
   });
 
   it('verifies GitHub identity and repository write permission before sign-in', async () => {
@@ -213,10 +296,10 @@ describe('public route and drawer', () => {
     vi.stubGlobal('fetch', fetchMock);
     try {
       renderAt('/login');
-      fireEvent.change(screen.getByLabelText('GitHub classic personal access token'), {
+      fireEvent.change(screen.getByLabelText('Personal Access Token'), {
         target: { value: 'synthetic-test-token' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
 
       expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();

@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowDownUp,
   AudioLines,
   BadgeCheck,
@@ -21,6 +22,7 @@ import {
 
 const iconCatalog = {
   brand: Hexagon,
+  navigationBack: ArrowLeft,
   navigationOpen: Menu,
   navigationClose: X,
   accessKey: KeyRound,

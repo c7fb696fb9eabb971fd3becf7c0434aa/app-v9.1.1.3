@@ -45,4 +45,16 @@ describe('Studio route application chrome', () => {
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open right navigation' })).toBeInTheDocument();
   });
+
+  it('redirects an authenticated login route to Home', async () => {
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Home route test' })).toBeVisible();
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(document.querySelector('.login-shell')).not.toBeInTheDocument();
+  });
 });

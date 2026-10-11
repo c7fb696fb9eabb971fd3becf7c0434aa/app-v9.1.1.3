@@ -16,6 +16,7 @@ Implement `/` public landing -> GitHub sign-in -> protected `/home` documentatio
 - The header home link targets `/` when signed out and `/home` when authenticated. No authenticated UI links back to `/`.
 - Do not include a Studio link or button anywhere; reach Studio only by manually entering `/#/studio`.
 - Implement PAT login form with show/hide, submit progress, validation, accessible errors, and verified GitHub identity/permission result.
+- Render `/login` as a clean independent page without the shared site header, app shell, or shared UI input/icon components; center its return-home link.
 - Protect `/home` and Studio routes by verified GitHub memory auth and return signed-out direct visits to `/`.
 - Remove signup/email/instant-developer fake access and ensure the OAuth client ID is not mistaken for PAT verification.
 
@@ -34,5 +35,7 @@ Implement `/` public landing -> GitHub sign-in -> protected `/home` documentatio
 Browser tests for public home, drawer navigation, successful and rejected login, deep link to Studio, expiry, logout, refresh re-auth, keyboard, and mobile layout.
 
 **Local evidence:** `/` public landing, mocked login-to-`/home`, `/home` GitHub snapshot rendering for pages/sub-pages/cards, signed-out home/Studio redirects, PAT show/hide, and drawer isolation are implemented and tested. Live sign-in/read worked against deployed commit `fd72311`; draft CRUD was exercised, but no publish was made.
+
+**Local login-route evidence:** `/login` uses an independent full-viewport layout and form controls without shared site chrome; its return-home link is centered, and authenticated users redirect to `/home`.
 
 **Not verified:** An authenticated attempt to navigate back to `/` needs an explicit browser test. Publish/cleanup on production remains pending and requires the approved signed-in state.

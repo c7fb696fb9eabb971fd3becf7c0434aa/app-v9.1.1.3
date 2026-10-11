@@ -48,7 +48,27 @@ function LoadingRoute() {
 export function AppRoutes() {
   const { user } = useAuth();
   const { pathname } = useLocation();
-  const isStudioWorkspace = pathname.replace(/\/+$/, '') === APP_ROUTES.studioBase;
+  const normalizedPathname = pathname.replace(/\/+$/, '') || APP_ROUTES.publicHome;
+  const isStudioWorkspace = normalizedPathname === APP_ROUTES.studioBase;
+
+  if (normalizedPathname === APP_ROUTES.login) {
+    return (
+      <div className="login-shell">
+        <main className="login-main">
+          {user ? (
+            <Navigate to={APP_ROUTES.home} replace />
+          ) : (
+            <RouteErrorBoundary route="login">
+              <Suspense fallback={<LoadingRoute />}>
+                <LoginPage />
+              </Suspense>
+            </RouteErrorBoundary>
+          )}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       {!isStudioWorkspace && <SiteHeader onLoginIntent={prefetchLoginPage} />}
@@ -62,20 +82,6 @@ export function AppRoutes() {
               ) : (
                 <RouteErrorBoundary route="public-home">
                   <PublicHomePage />
-                </RouteErrorBoundary>
-              )
-            }
-          />
-          <Route
-            path={APP_ROUTES.login}
-            element={
-              user ? (
-                <Navigate to={APP_ROUTES.home} replace />
-              ) : (
-                <RouteErrorBoundary route="login">
-                  <Suspense fallback={<LoadingRoute />}>
-                    <LoginPage />
-                  </Suspense>
                 </RouteErrorBoundary>
               )
             }
