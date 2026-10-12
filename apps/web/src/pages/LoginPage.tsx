@@ -17,6 +17,8 @@ export function LoginPage() {
     github_unavailable: 'GitHub could not be reached. Check your connection and try again.',
     github_permission_denied: 'This GitHub account cannot access the configured repository.',
     github_request_failed: 'GitHub could not verify access. Try again shortly.',
+    github_session_storage_unavailable:
+      'Your browser could not save this session. Check its storage settings and try again.',
   };
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

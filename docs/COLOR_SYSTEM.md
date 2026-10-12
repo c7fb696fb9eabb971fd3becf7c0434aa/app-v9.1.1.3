@@ -39,6 +39,17 @@ The global header is a full-width, sticky frosted-glass surface with a centered,
 | **Brand mark**                  | 33px square shared size token; all three marks use the same clickable home link, routing signed-in users to `/#/home` and signed-out users to `/#/` |
 | **Navigation overlay**          | Backdrop and drawer stack above the sticky header; both drawers use identical geometry                                                              |
 
+### Independent Backend Header
+
+The protected `/backend` route has a separate header surface matching the global header's 56px
+minimum height, sticky positioning, 90% Obsidian Glass, 12px blur, standard 8%-white divider, and
+centered maximum-1280px inner container with 16px inline padding. Its independent three-column
+layout places an inert “Back to home” secondary button on the left, a centered “Backend” heading,
+and inert “GitHub sync” and “Deployments” secondary buttons on the right. Buttons use the shared
+button primitive for global visual consistency; the route does not reuse `SiteHeader`. At viewport
+widths of 560px and below, the centered title stays centered on the first row while the two
+right-side buttons move to a second row.
+
 ### Independent Sidebars
 
 The left and right sidebars are separate `LeftSidebar` and `RightSidebar` feature components. Each opens from its own edge and independently owns its trigger, open state, focus behavior, Escape handling, focus restoration, backdrop, markup, and authentication/content responsibilities. The left sidebar has no sign-in or login actions; the right sidebar owns its authentication-aware login/logout actions. The sidebars may consume the same documented design tokens and generic icon/button styles, but must not share sidebar-specific components, state, markup, or behavior.

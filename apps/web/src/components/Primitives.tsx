@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   useEffect,
   useRef,
   useId,
@@ -8,17 +9,20 @@ import {
   type ReactNode,
 } from 'react';
 
-export function Button({
-  variant = 'secondary',
-  className = '',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'danger';
-}) {
+export const Button = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: 'primary' | 'secondary' | 'danger';
+  }
+>(function Button({ variant = 'secondary', className = '', ...props }, ref) {
   return (
-    <button {...props} className={`action-button action-button-${variant} ${className}`.trim()} />
+    <button
+      {...props}
+      ref={ref}
+      className={`action-button action-button-${variant} ${className}`.trim()}
+    />
   );
-}
+});
 
 export function TextInput({
   id,

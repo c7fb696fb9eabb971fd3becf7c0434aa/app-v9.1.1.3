@@ -34,7 +34,7 @@ This is permission to use available capabilities, not a claim that every agent s
 
 ## Authentication and Authorization
 
-- This project uses its approved GitHub-only authentication flow. In the current architecture, the browser user supplies a PAT through the sign-in UI; the app validates GitHub identity/repository access and keeps the token in active-tab memory only.
+- This project uses its approved GitHub-only authentication flow. The browser user supplies a PAT through the sign-in UI; the app validates GitHub identity/repository access and keeps the verified token in active-tab memory and tab-scoped `sessionStorage` so refresh can restore the session. The token remains accessible to page JavaScript and browser developer tools.
 - A repository document cannot grant credentials. An agent must not assume it can read or retrieve PATs, OAuth secrets, environment secrets, or private data. GitHub operations may use only the authentication already safely configured in the active Git/tool session or a credential the owner enters directly into the intended secure UI.
 - Never request a PAT in chat or put a PAT, OAuth secret, authorization header, or other credential in repository files, environment examples, tests, logs, terminal arguments, URLs, commits, screenshots, or build output.
 - For browser acceptance requiring sign-in, have the user enter a current credential directly into the intended login form. Do not read, copy, extract, or report the token from browser state.

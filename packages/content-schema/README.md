@@ -1,9 +1,9 @@
 # Content Schema
 
 This workspace package owns runtime validation and storage-path rules for GreenDocs page, card,
-attachment, and public-index records. The current web app uses it when reading repository records
-and validating proposed repository mutations. There is no current production editor UI or separate
-API application.
+attachment, and public-index records. The web app uses it when reading repository records; the
+GitHub client uses it to validate proposed repository mutations. No user-facing authoring UI
+currently builds drafts or calls the publish operation. There is no separate API application.
 
 ## Storage contract
 

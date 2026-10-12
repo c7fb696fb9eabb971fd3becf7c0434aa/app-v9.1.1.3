@@ -12,8 +12,11 @@ const loadLoginPage = () =>
   import('../pages/LoginPage').then((module) => ({ default: module.LoginPage }));
 const loadHomePage = () =>
   import('../pages/HomePage').then((module) => ({ default: module.HomePage }));
+const loadBackendPage = () =>
+  import('../pages/BackendPage').then((module) => ({ default: module.BackendPage }));
 const LoginPage = lazy(loadLoginPage);
 const HomePage = lazy(loadHomePage);
+const BackendPage = lazy(loadBackendPage);
 
 function canPrefetch(): boolean {
   if (typeof navigator === 'undefined' || !navigator.onLine) return false;
@@ -34,20 +37,24 @@ function prefetchLoginPage() {
   void loadLoginPage().catch(() => reportClientEvent('route_chunk_failure', 'login'));
 }
 
-function LoadingRoute() {
-  return (
-    <p className="status-message" role="status" aria-live="polite">
-      Loading section…
-    </p>
-  );
-}
-
 export function AppRoutes() {
-  const { user } = useAuth();
+  const { user, isCheckingSession, sessionRestoreError } = useAuth();
   const { pathname } = useLocation();
   const normalizedPathname = pathname.replace(/\/+$/, '') || APP_ROUTES.publicHome;
   const isDocumentationHome = normalizedPathname === APP_ROUTES.home;
   const mainContentClass = isDocumentationHome ? 'main-content main-content-home' : 'main-content';
+
+  if (normalizedPathname === APP_ROUTES.backend) {
+    return (
+      <ProtectedRoute>
+        <RouteErrorBoundary route="backend">
+          <Suspense fallback={null}>
+            <BackendPage />
+          </Suspense>
+        </RouteErrorBoundary>
+      </ProtectedRoute>
+    );
+  }
 
   if (normalizedPathname === APP_ROUTES.login) {
     return (
@@ -55,9 +62,9 @@ export function AppRoutes() {
         <main className="login-main">
           {user ? (
             <Navigate to={APP_ROUTES.home} replace />
-          ) : (
+          ) : isCheckingSession ? null : (
             <RouteErrorBoundary route="login">
-              <Suspense fallback={<LoadingRoute />}>
+              <Suspense fallback={null}>
                 <LoginPage />
               </Suspense>
             </RouteErrorBoundary>
@@ -70,6 +77,12 @@ export function AppRoutes() {
   return (
     <div className="app-shell">
       <SiteHeader onLoginIntent={prefetchLoginPage} />
+      {sessionRestoreError && (
+        <p className="status-message status-error" role="alert">
+          Could not restore the saved GitHub session. Check your browser storage and connection,
+          then refresh to retry.
+        </p>
+      )}
       <main className={mainContentClass}>
         <Routes>
           <Route
@@ -89,7 +102,7 @@ export function AppRoutes() {
             element={
               <ProtectedRoute>
                 <RouteErrorBoundary route="home">
-                  <Suspense fallback={<LoadingRoute />}>
+                  <Suspense fallback={null}>
                     <HomePage />
                   </Suspense>
                 </RouteErrorBoundary>

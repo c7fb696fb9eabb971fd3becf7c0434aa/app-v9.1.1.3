@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import { reportClientEvent } from '../../lib/observability';
 
 const REPOSITORY_PATH = `/repos/${GITHUB_REPOSITORY.owner}/${GITHUB_REPOSITORY.name}`;
 const API_VERSION = '2022-11-28';
+const SESSION_TOKEN_KEY = 'greendocs.github.pat';
 
 interface GithubIdentity {
   id: number;
@@ -29,7 +31,8 @@ interface GithubRepository {
 
 interface AuthState {
   user: VerifiedGithubUser | null;
-  isCheckingSession: false;
+  isCheckingSession: boolean;
+  sessionRestoreError: boolean;
   loginWithPat: (pat: string) => Promise<void>;
   logout: () => void;
   githubRequest: (path: string, init?: RequestInit) => Promise<Response>;
@@ -71,14 +74,109 @@ function verifiedUser(identity: GithubIdentity): VerifiedGithubUser {
   };
 }
 
+async function verifyPat(candidate: string): Promise<VerifiedGithubUser> {
+  const headers = new Headers({
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${candidate}`,
+    'X-GitHub-Api-Version': API_VERSION,
+  });
+  let identityResponse: Response;
+  let repositoryResponse: Response;
+  try {
+    [identityResponse, repositoryResponse] = await Promise.all([
+      fetch(`${GITHUB_API_ORIGIN}/user`, {
+        headers,
+        cache: 'no-store',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        redirect: 'error',
+      }),
+      fetch(`${GITHUB_API_ORIGIN}${REPOSITORY_PATH}`, {
+        headers,
+        cache: 'no-store',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        redirect: 'error',
+      }),
+    ]);
+  } catch {
+    throw new Error('github_unavailable');
+  }
+
+  const identity = verifiedUser(await parseResponse<GithubIdentity>(identityResponse));
+  const repository = await parseResponse<GithubRepository>(repositoryResponse);
+  if (repository.permissions?.push !== true) {
+    throw new Error('repository_write_denied');
+  }
+  return identity;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const token = useRef<string | null>(null);
   const [user, setUser] = useState<VerifiedGithubUser | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [sessionRestoreError, setSessionRestoreError] = useState(false);
 
   const clearAuth = useCallback(() => {
     token.current = null;
     setUser(null);
+    try {
+      window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    } catch {
+      reportClientEvent('github_session_storage_failure', 'home');
+    }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let savedToken: string | null;
+    try {
+      savedToken = window.sessionStorage.getItem(SESSION_TOKEN_KEY);
+    } catch {
+      reportClientEvent('github_session_storage_failure', 'home');
+      setSessionRestoreError(true);
+      setIsCheckingSession(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!savedToken) {
+      setIsCheckingSession(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    void verifyPat(savedToken)
+      .then((verified) => {
+        if (!active) return;
+        token.current = savedToken;
+        setUser(verified);
+        setSessionRestoreError(false);
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        const errorCode = cause instanceof Error ? cause.message : 'github_request_failed';
+        if (
+          errorCode === 'github_token_invalid' ||
+          errorCode === 'github_permission_denied' ||
+          errorCode === 'repository_write_denied'
+        ) {
+          clearAuth();
+        } else {
+          setSessionRestoreError(true);
+          reportClientEvent('github_session_restore_failure', 'home');
+        }
+      })
+      .finally(() => {
+        if (active) setIsCheckingSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [clearAuth]);
 
   const githubRequest = useCallback(
     async (path: string, init: RequestInit = {}): Promise<Response> => {
@@ -125,56 +223,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [clearAuth],
   );
 
-  const loginWithPat = useCallback(async (pat: string) => {
-    const candidate = pat.trim();
-    if (!candidate) throw new Error('github_token_invalid');
-    token.current = null;
-    setUser(null);
-
-    const headers = new Headers({
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${candidate}`,
-      'X-GitHub-Api-Version': API_VERSION,
-    });
-    let identityResponse: Response;
-    let repositoryResponse: Response;
-    try {
-      [identityResponse, repositoryResponse] = await Promise.all([
-        fetch(`${GITHUB_API_ORIGIN}/user`, {
-          headers,
-          cache: 'no-store',
-          credentials: 'omit',
-          referrerPolicy: 'no-referrer',
-          redirect: 'error',
-        }),
-        fetch(`${GITHUB_API_ORIGIN}${REPOSITORY_PATH}`, {
-          headers,
-          cache: 'no-store',
-          credentials: 'omit',
-          referrerPolicy: 'no-referrer',
-          redirect: 'error',
-        }),
-      ]);
-    } catch {
-      throw new Error('github_unavailable');
-    }
-
-    const identity = verifiedUser(await parseResponse<GithubIdentity>(identityResponse));
-    const repository = await parseResponse<GithubRepository>(repositoryResponse);
-    if (repository.permissions?.push !== true) {
-      throw new Error('repository_write_denied');
-    }
-    token.current = candidate;
-    setUser(identity);
-  }, []);
+  const loginWithPat = useCallback(
+    async (pat: string) => {
+      const candidate = pat.trim();
+      if (!candidate) throw new Error('github_token_invalid');
+      clearAuth();
+      setSessionRestoreError(false);
+      setIsCheckingSession(true);
+      try {
+        const identity = await verifyPat(candidate);
+        try {
+          window.sessionStorage.setItem(SESSION_TOKEN_KEY, candidate);
+        } catch {
+          throw new Error('github_session_storage_unavailable');
+        }
+        token.current = candidate;
+        setUser(identity);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    },
+    [clearAuth],
+  );
 
   const logout = useCallback(() => {
     clearAuth();
   }, [clearAuth]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, isCheckingSession: false, loginWithPat, logout, githubRequest }),
-    [githubRequest, loginWithPat, logout, user],
+    () => ({
+      user,
+      isCheckingSession,
+      sessionRestoreError,
+      loginWithPat,
+      logout,
+      githubRequest,
+    }),
+    [githubRequest, isCheckingSession, loginWithPat, logout, sessionRestoreError, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

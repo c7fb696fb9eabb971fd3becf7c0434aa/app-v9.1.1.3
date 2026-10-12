@@ -12,8 +12,8 @@ source-control history, and static hosting. The application has no server-side A
 ## Audience
 
 - People who need to browse technical documentation published from the configured repository.
-- Repository collaborators who are intended to maintain and publish that documentation as the
-  product's authoring capabilities are completed.
+- Repository collaborators who may maintain and publish that documentation as authoring
+  capabilities are developed.
 - Maintainers developing and operating the GreenDocs application.
 
 ## Product goals
@@ -31,11 +31,13 @@ source-control history, and static hosting. The application has no server-side A
 - GitHub is the configured identity provider, repository host, API, and deployment platform.
 - GitHub Pages serves a static SPA; it cannot hide a user-entered PAT from JavaScript executing in
   the page.
-- Authentication must not persist the PAT in URLs, browser storage, source, logs, or build output.
+- Authentication stores the PAT in tab-scoped `sessionStorage` so sign-in survives refresh. It
+  must never be stored in URLs, source, logs, or build output; browser JavaScript can read the
+  session-stored PAT.
 - Publishing must validate the full resulting content and update the fixed branch without a force
   push, against the expected branch head.
-- The repository currently has no server-side API, external database, or production editor UI.
-  Implementing any of those is a product/architecture change, not an assumption agents may make.
+- The application has no server-side API or external database. Introducing either is a
+  product/architecture change, not an assumption agents may make.
 
 ## Current implementation (verified 2026-10-12)
 
@@ -43,22 +45,21 @@ source-control history, and static hosting. The application has no server-side A
 
 - A public landing route and a dedicated GitHub PAT sign-in route.
 - Sign-in calls GitHub directly, verifies the returned identity and write permission on the fixed
-  repository, and holds the PAT in active-tab memory only.
+  repository, and stores the PAT in tab-scoped session storage. The app revalidates it with GitHub
+  after refresh; sign-out and invalid credentials clear it.
 - The protected `/home` route reads the repository's Git ref, commit, tree, and relevant blobs;
   validates records; and renders pages, nested pages, cards, and supported attachments.
+- The protected, undiscoverable `/#/backend` route renders an independent header visually matching
+  the Home header surface. It contains inert Back to home, GitHub sync, and Deployments buttons
+  around a centered Backend heading; it does not show other page content or shared Home components.
+- There is no user-facing authoring or publish workflow. The repository client has a tested publish
+  primitive, but no page calls it.
 - GitHub API requests use `no-store`; repository and schema boundaries have tests.
 - GitHub Actions runs CI and deploys the static web app to GitHub Pages from `main`.
 
-### Implemented building block, not an exposed user feature
-
-`GitHubRepositoryClient.publish` validates mutation batches and performs a non-force Git tree,
-commit, and branch-ref update with an expected-head check. Its current callers are tests; the
-application has no page/card editor or publish UI wired to this operation. Do not describe the
-publish workflow as available to users until that UI and its review/acceptance path exist.
-
 ### Not established by the repository
 
-- A production-ready authoring/editor experience.
+- A user-facing editor or authoring/publishing workflow.
 - A staffed support process or named documentation owners.
 - A prioritized product roadmap maintained in this repository.
 

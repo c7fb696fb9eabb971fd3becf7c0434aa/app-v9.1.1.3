@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../features/auth';
 import { AppRoutes } from './AppRoutes';
 import { GITHUB_API_ORIGIN, GITHUB_REPOSITORY } from '../../config';
+
+beforeEach(() => {
+  window.sessionStorage.clear();
+});
 
 function PublicRouteProbe() {
   const navigate = useNavigate();
@@ -11,6 +15,7 @@ function PublicRouteProbe() {
   return (
     <>
       <button onClick={() => navigate('/')}>Go to public route</button>
+      <button onClick={() => navigate('/backend')}>Go to backend route</button>
       <output aria-label="Current test route">{location.pathname}</output>
     </>
   );
@@ -107,6 +112,54 @@ describe('public route and drawer', () => {
     renderAt('/home');
     expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
+  });
+
+  it('protects /backend from signed-out visitors', async () => {
+    renderAt('/backend');
+    expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Authoring workspace' })).not.toBeInTheDocument();
+  });
+
+  it('renders the independent backend shell after sign-in', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 123,
+            login: 'verified-user',
+            name: null,
+            avatar_url: 'https://avatars.example.test/123',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ permissions: { push: true } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      renderAt('/login', true);
+      fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+        target: { value: 'synthetic-test-token' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Go to backend route' }));
+
+      expect(await screen.findByRole('banner', { name: 'Backend header' })).toBeVisible();
+      expect(document.querySelector('.backend-header-inner')).not.toBeEmptyDOMElement();
+      expect(document.querySelector('.backend-main')).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Loading section|Checking GitHub session/i),
+      ).not.toBeInTheDocument();
+      expect(document.querySelector('.site-header, .app-shell')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('loads repository pages and cards at /home after successful GitHub sign-in', async () => {
@@ -300,6 +353,7 @@ describe('public route and drawer', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
 
       expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      expect(window.sessionStorage.getItem('greendocs.github.pat')).toBe('synthetic-test-token');
       expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
@@ -316,6 +370,99 @@ describe('public route and drawer', () => {
         expect.objectContaining({ cache: 'no-store', credentials: 'omit' }),
       );
       expect(screen.queryByText('Sign in to open the documentation home.')).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('restores a saved GitHub session after refresh and clears it on sign-out', async () => {
+    window.sessionStorage.setItem('greendocs.github.pat', 'session-test-token');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 123,
+            login: 'verified-user',
+            name: null,
+            avatar_url: 'https://avatars.example.test/123',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ permissions: { push: true } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ object: { sha: 'a'.repeat(40) } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tree: { sha: 'b'.repeat(40) } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tree: [] })));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      renderAt('/home');
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'GreenDocs' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+      expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
+      expect(window.sessionStorage.getItem('greendocs.github.pat')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('clears a saved session when GitHub rejects its token', async () => {
+    window.sessionStorage.setItem('greendocs.github.pat', 'expired-session-test-token');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ permissions: { push: true } }), { status: 200 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      renderAt('/home');
+
+      expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
+      expect(window.sessionStorage.getItem('greendocs.github.pat')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('restores a saved GitHub session before rendering the protected backend route', async () => {
+    window.sessionStorage.setItem('greendocs.github.pat', 'backend-session-test-token');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 123,
+            login: 'verified-user',
+            name: null,
+            avatar_url: 'https://avatars.example.test/123',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ permissions: { push: true } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      renderAt('/backend');
+
+      expect(await screen.findByRole('banner', { name: 'Backend header' })).toBeVisible();
+      expect(screen.getByRole('heading', { name: 'Backend', level: 1 })).toBeInTheDocument();
+      expect(window.sessionStorage.getItem('greendocs.github.pat')).not.toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.unstubAllGlobals();
     }

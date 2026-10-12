@@ -99,10 +99,12 @@ repeat the exposed value.
 ## Security and production writes
 
 - GitHub is the only approved identity and runtime data platform under the current ADR.
-- PATs are entered into the login form and held in active-tab memory; JavaScript running in the
-  signed-in page can still use them.
-- Never store credentials in `.env`, source, tests, browser storage, URL, logs, screenshots,
-  commits, or reports.
+- PATs are entered into the login form and held in active-tab memory plus tab-scoped
+  `sessionStorage` so refresh can restore the session. JavaScript running in the signed-in page can
+  read and use them.
+- Never store credentials in `.env`, source, localStorage, IndexedDB, Cache API, URL, logs,
+  screenshots, commits, or reports. The approved session-storage exception is cleared on sign-out
+  and invalid-token response.
 - Production repository edits and deploy operations require explicit approval of the exact
   operation. Before an authorized Git write, verify branch, remote, staged diff, and test result.
 - See [ADR 0002](./adr/0002-pat-auth-and-session-security.md) and

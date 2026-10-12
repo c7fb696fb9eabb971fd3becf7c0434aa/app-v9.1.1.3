@@ -11,8 +11,9 @@ This describes currently implemented runtime behavior. The current architecture 
    endpoint.
 3. The application displays the GitHub identity returned by `/user` and proceeds only when GitHub
    reports repository push permission.
-4. The PAT is held in a React ref in active-tab memory. Sign-out or a GitHub 401 clears it. Reload
-   requires signing in again.
+4. The PAT is held in a React ref and tab-scoped `sessionStorage`. After reload, GitHub identity
+   and repository push permission are revalidated before restoring the session. Sign-out or a
+   GitHub 401 clears it.
 5. Successful sign-in navigates to `/#/home`; an authenticated visit to `/#/` redirects to
    `/home`.
 
@@ -22,20 +23,20 @@ This describes currently implemented runtime behavior. The current architecture 
   GitHub's Git Database API.
 - Records and relationships are validated by the shared content schema before rendering.
 - The Home page renders repository pages, nested pages, cards, and supported attachments.
-- The source commit SHA identifies the read snapshot. This does not imply that browser editing or
-  draft reconciliation is implemented.
+- The source commit SHA identifies the read snapshot. The protected `/backend` route renders an
+  independent header and empty workspace panels; it does not load repository data.
 
 ## 3. Repository publishing capability
 
-`GitHubRepositoryClient.publish` validates a complete mutation batch, checks the expected branch
-head, creates a Git tree and commit, and updates the configured ref without force. Unit tests cover
-the operation. No production application component currently invokes it; there is no editor/publish
-screen.
+`GitHubRepositoryClient.publish` validates complete mutations, checks the expected branch head,
+creates a Git tree and commit, and updates the configured ref without force. The operation has
+tests, but no current user-facing page creates drafts or calls it.
 
 ## 4. Persistence and service boundaries
 
 - There is no application API, server-side session, content database, or cloud runtime.
 - GitHub is authoritative for committed repository content and commit history.
-- The application does not persist authentication or browser drafts across reloads.
+- The application persists the PAT only in tab-scoped `sessionStorage` for refresh restoration;
+  sign-out clears it.
 - Rate limits, payload limits, fixed repository paths, schema validation, and expected-head checks
   constrain repository access and writes.

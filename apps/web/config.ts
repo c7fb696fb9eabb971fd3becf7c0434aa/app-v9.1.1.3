@@ -3,6 +3,7 @@ import { DEFAULT_WEB_PORT } from '@greendocs/contracts/runtime-config';
 export const APP_ROUTES = {
   publicHome: '/',
   home: '/home',
+  backend: '/backend',
   login: '/login',
 } as const;
 

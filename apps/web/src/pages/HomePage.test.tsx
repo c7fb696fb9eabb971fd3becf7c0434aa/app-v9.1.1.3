@@ -46,4 +46,12 @@ describe('HomePage', () => {
     ).not.toBeInTheDocument();
     expect(container.querySelector('.published-page-tree')?.childElementCount).toBe(0);
   });
+
+  it('loads the repository without showing temporary loading copy', () => {
+    readSnapshot.mockReturnValue(new Promise(() => {}));
+    render(<HomePage />);
+
+    expect(readSnapshot).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/Loading pages and cards from GitHub/)).not.toBeInTheDocument();
+  });
 });

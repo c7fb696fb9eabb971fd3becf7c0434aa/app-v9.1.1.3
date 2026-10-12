@@ -249,11 +249,6 @@ export function HomePage() {
     <section className="documentation-home" aria-labelledby="home-title">
       <HomeLocationTrail />
       <div className="documentation-home-content">
-        {loading && (
-          <p className="status-message" role="status">
-            Loading pages and cards from GitHub…
-          </p>
-        )}
         {error && (
           <div className="status-message status-error" role="alert">
             <p>{error}</p>

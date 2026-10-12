@@ -30,6 +30,8 @@ current behavior before making a decision.
   always-on warm-up contract.
 - [Project Architect](../.github/agents/project-architect.agent.md) is a read-only architecture
   guide. It verifies against the current docs and code and is optional—not an information gate.
+- [Backend Planner](../.github/agents/backend-planner.agent.md) is a read-only planner for the
+  protected `/backend` blank header route. It returns an implementation plan and does not edit code.
 - [Muai execution agent](../.github/agents/muai.agent.md) handles bounded implementation and
   operations when exposed by the active host.
 - [Documentation maintenance skill](../.github/skills/documentation-maintenance/SKILL.md) is an
@@ -44,8 +46,9 @@ canonical doc through the documentation workflow and review the diff.
 
 ## Current snapshot
 
-GreenDocs is a GitHub-backed static documentation workspace. Current user-visible routes include
-the public landing page, GitHub sign-in, and authenticated read-only documentation home. The
-repository client has a tested publish implementation but no editor/publish UI. See the
+GreenDocs is a GitHub-backed static documentation workspace. Current routes include the public
+landing page, GitHub sign-in, authenticated documentation home, and an undiscoverable, protected
+`/backend` route with an independent header and empty workspace panels. There is no user-facing
+authoring or publishing UI. See the
 [Product Brief](../docs/PRODUCT_BRIEF.md) and [System Architecture](../docs/ARCHITECTURE.md) for
 verified detail.

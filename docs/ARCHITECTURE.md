@@ -19,32 +19,37 @@ GitHub Actions: CI on pull requests and main pushes; Pages deployment on main pu
 
 There is no checked-in `apps/api`, application server, cloud runtime, or external content
 database. The browser-to-GitHub trust boundary is security-sensitive because the SPA necessarily
-holds the PAT in memory while authenticated.
+holds the PAT in session storage and memory while authenticated; page JavaScript can read it.
 
 ## Runtime and data flow
 
 1. `apps/web/src/main.tsx` mounts `App`; `App` composes `AuthProvider` and the hash router.
 2. `apps/web/src/app/AppRoutes.tsx` owns route selection and lazy loading. `ProtectedRoute`
-   protects `/home`; route error boundaries provide local render-failure recovery.
+   protects `/home` and `/backend`; route error boundaries provide local render-failure recovery.
 3. `apps/web/src/features/auth/AuthContext.tsx` verifies GitHub `/user` and the fixed repository's
-   push permission. The PAT is held in a React ref (memory only); sign-out or a 401 clears it.
-   Requests are restricted to the GitHub API origin and the configured repository path.
+   push permission. The PAT is held in a React ref and tab-scoped `sessionStorage`; on reload the
+   app revalidates it before restoring the signed-in state. Sign-out or a 401 clears it. Requests
+   are restricted to the GitHub API origin and the configured repository path.
 4. `apps/web/src/pages/HomePage.tsx` asks the GitHub feature to read the repository snapshot, then
    renders page hierarchy, cards, and attachments. Loading and request errors are visible.
-5. `apps/web/src/features/github/client.ts` reads the fixed branch/ref, commit, recursive tree, and
-   validated record blobs. It also implements batch validation and atomic publish operations; no
-   current application component calls `publish`.
-6. GitHub repository history is authoritative for committed content. The current UI has no editor,
-   persisted draft store, or publish workflow.
+5. `apps/web/src/pages/BackendPage.tsx` renders the protected, independently styled `/backend`
+   route. Its header has inert Back to home, GitHub sync, and Deployments buttons around a centered
+   Backend heading; it does not read repository data or provide authoring/publishing UI.
+6. `apps/web/src/features/github/client.ts` reads the fixed branch/ref, commit, recursive tree, and
+   validated record blobs. It also retains a tested batch `publish` library operation; no
+   user-facing page currently calls it.
+7. GitHub repository history is authoritative for committed content. The `/backend` route has no
+   draft state or publishing behavior.
 
 ## Component and package ownership
 
 | Boundary                    | Owns                                                                                              | Important entry points                                            |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | App composition and routes  | Hash routing, public/protected routes, lazy route loading, route-level error UI                   | `apps/web/src/app/App.tsx`, `AppRoutes.tsx`, `ProtectedRoute.tsx` |
-| Authentication              | GitHub identity/permission checks, volatile PAT, constrained authenticated requests               | `apps/web/src/features/auth/AuthContext.tsx`                      |
+| Authentication              | GitHub identity/permission checks, tab-scoped PAT, constrained authenticated requests             | `apps/web/src/features/auth/AuthContext.tsx`                      |
 | GitHub repository client    | Fixed-repository snapshot reads, record validation, asset validation, mutation commits            | `apps/web/src/features/github/client.ts`                          |
 | Navigation                  | Header, independent left/right drawers, auth-aware navigation                                     | `apps/web/src/features/navigation/`                               |
+| Backend route shell         | Protected route with an independent header and inert controls; no authoring UI                    | `apps/web/src/pages/BackendPage.tsx`                              |
 | Shared UI                   | Buttons, inputs, status, dialog, tabs, icon catalog                                               | `apps/web/src/components/`                                        |
 | Shared contracts            | Browser-safe record and publish-request TypeScript interfaces, runtime configuration and policies | `packages/contracts/`                                             |
 | Content schema              | Zod record/relationship validation, limits, storage paths, deterministic page trees               | `packages/content-schema/src/index.ts`                            |
@@ -67,8 +72,8 @@ that does not mean an API app currently exists.
   attachments refer to media under `content/media/<uuid>.<mime-derived-extension>`.
 - IDs, validated records, and explicit parent relationships define identity and hierarchy. Titles
   and slugs are not file paths.
-- Draft persistence is not implemented. The published repository state and its Git commit history
-  remain authoritative.
+- No user-facing editor, draft persistence, or publish workflow is implemented. The repository
+  client publish primitive is currently a library capability tested independently of the UI.
 
 See the [content schema guide](../packages/content-schema/README.md), [cache policy](./CACHE_POLICY.md),
 and [ADR 0001](./adr/0001-system-architecture.md) for domain details and rationale.
@@ -76,11 +81,13 @@ and [ADR 0001](./adr/0001-system-architecture.md) for domain details and rationa
 ## Trust boundaries and invariants
 
 - Never ask an owner to send a PAT in chat. The user enters it in the application sign-in UI.
-- Never log, persist, bundle, or place credentials in URLs, tests, docs, or command arguments.
+- Never log, bundle, or place credentials in URLs, tests, docs, or command arguments. The PAT is
+  deliberately stored in tab-scoped `sessionStorage` to survive refresh; it remains readable by
+  JavaScript and is not protected from XSS or developer tools.
 - Do not accept caller-selected repository owner/name/branch or arbitrary Git paths.
 - Treat every repository record as untrusted until runtime schema validation succeeds.
-- Validate the resulting complete content set before publishing; require the expected branch head
-  and update the ref without force.
+- The repository client's publish primitive validates the resulting complete content set, requires
+  the expected branch head, and updates the ref without force. No current UI invokes it.
 - Do not test repository writes or deploy to production without explicit approval of the exact
   operation.
 - A successful commit, green CI run, and successful Pages deployment are separate outcomes.
@@ -91,6 +98,8 @@ and [Project Access](../AGENTIC/PROJECT_ACCESS.md).
 ## Verification map
 
 - Route, sign-in, and protected-home behavior: `apps/web/src/app/AppRoutes.test.tsx`.
+- Protected backend route, independent header, and empty workspace panels:
+  `apps/web/src/pages/BackendPage.test.tsx`.
 - GitHub snapshot and publish behavior: `apps/web/src/features/github/client.test.ts`.
 - Content invariants and stable ordering: `packages/content-schema/src/index.test.ts`.
 - Shared UI accessibility behaviors: `apps/web/src/components/*.test.tsx`.

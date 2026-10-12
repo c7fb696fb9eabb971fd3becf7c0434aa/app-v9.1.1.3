@@ -4,18 +4,27 @@ These contracts describe shared presentation primitives and the authenticated do
 
 ## Shared primitives
 
-| Component         | Owner and API                                                                         | State and behavior                                                  | Render/accessibility                                                                           | Persistence and verification                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `Button`          | Design primitives; `variant`, `type`, `disabled`, children, `onClick`                 | Parent-controlled; disabled prevents activation                     | Native button, visible focus, disabled cursor/state; high-impact actions keep text             | No persistence. Test keyboard activation and disabled behavior.                                    |
-| `IconButton`      | Design primitives; required `IconName`, visible action `label`, `disabled`, `onClick` | Parent-controlled                                                   | Native button with `aria-label`, catalog icon hidden from assistive tech, focus ring           | No persistence. Test name, focus, callback, and disabled state.                                    |
-| `TextInput`       | Design primitives; `id`, label, value, `onChange`, type, error                        | Controlled; parent clears sensitive values after submission         | Associated visible label; error via `aria-describedby` and alert/status semantics              | No persistence. Test labels, validation, and controlled updates.                                   |
-| `Dialog`          | Design primitives; title, children, close callback                                    | Parent owns open/closed state; Escape and close action dismiss      | Dialog role, labelled title, initial focus, focus containment and restoration                  | No persistence. Test Escape, focus movement/restoration, and keyboard controls.                    |
-| `RightSidebar`    | Navigation feature; auth context and login-intent callback                            | Auth provider owns identity; sidebar owns only temporary open state | Right-side modal dialog, Escape, focus containment/restoration, backdrop close | Logout calls the auth feature; no other persistence. Test signed-out/in states and focus behavior. |
-| `StatusIndicator` | Shared status primitive; finite status enum, optional non-sensitive detail            | Controlled by feature state                                         | Status/live region with text and icon; never color-only                                        | No persistence. Test all finite states and accessible text.                                        |
-| `RoutePageShell`  | App route; route ID and page content                                                  | Route-local loading/error state                                     | Main landmark and route-specific error boundary; stable Suspense status                        | No persistence. Test each route failure independently.                                             |
+| Component         | Owner and API                                                                         | State and behavior                                                  | Render/accessibility                                                                 | Persistence and verification                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `Button`          | Design primitives; `variant`, `type`, `disabled`, children, `onClick`                 | Parent-controlled; disabled prevents activation                     | Native button, visible focus, disabled cursor/state; high-impact actions keep text   | No persistence. Test keyboard activation and disabled behavior.                                    |
+| `IconButton`      | Design primitives; required `IconName`, visible action `label`, `disabled`, `onClick` | Parent-controlled                                                   | Native button with `aria-label`, catalog icon hidden from assistive tech, focus ring | No persistence. Test name, focus, callback, and disabled state.                                    |
+| `TextInput`       | Design primitives; `id`, label, value, `onChange`, type, error                        | Controlled; parent clears sensitive values after submission         | Associated visible label; error via `aria-describedby` and alert/status semantics    | No persistence. Test labels, validation, and controlled updates.                                   |
+| `Dialog`          | Design primitives; title, children, close callback                                    | Parent owns open/closed state; Escape and close action dismiss      | Dialog role, labelled title, initial focus, focus containment and restoration        | No persistence. Test Escape, focus movement/restoration, and keyboard controls.                    |
+| `RightSidebar`    | Navigation feature; auth context and login-intent callback                            | Auth provider owns identity; sidebar owns only temporary open state | Right-side modal dialog, Escape, focus containment/restoration, backdrop close       | Logout calls the auth feature; no other persistence. Test signed-out/in states and focus behavior. |
+| `StatusIndicator` | Shared status primitive; finite status enum, optional non-sensitive detail            | Controlled by feature state                                         | Status/live region with text and icon; never color-only                              | No persistence. Test all finite states and accessible text.                                        |
+| `RoutePageShell`  | App route; route ID and page content                                                  | Route-local loading/error state                                     | Main landmark and route-specific error boundary; stable Suspense status              | No persistence. Test each route failure independently.                                             |
 
 ## Route flow and documentation home
 
+- `/backend` is an undiscoverable authenticated route protected by the same existing GitHub session
+  guard; omitting it from navigation is not an access-control boundary. It renders its own
+  independent header, not `SiteHeader`, the app shell, or Home content. The header matches the
+  global Home header's 56px sticky Obsidian Glass surface, standard divider, 12px blur, and centered
+  1280px inner geometry (16px inline padding). It contains an inert “Back to home” button on the
+  left, a centered “Backend” heading, and inert “GitHub sync” and “Deployments” buttons on the
+  right, using the shared secondary button primitive. It contains no logo, brand, or navigation.
+  Its workspace keeps two outer panels; the right panel contains bordered header, flexible content,
+  and footer regions with 4px inset and gaps. The header and footer regions are 33px high.
 - `SiteHeader` is sticky with a centered maximum-1280px container and a symmetrical 33px navigation / 33px brand / 33px navigation triad. Both header navigation controls and both sidebar close controls use the shared 33px control-size token. The centered brand link and both sidebar brand links use the shared `NavigationBrandLink` component and 33px navigation-brand design token. It routes to `/home` for an authenticated user and `/` otherwise.
 - `LeftSidebar` owns its left-opening overlay, close control, background, focus containment, Escape handling, and focus restoration. Its shared brand home link closes the left overlay on navigation. It contains no login/logout actions. Its footer uses the same Obsidian Glass surface and 12px blur as its header.
 - `RightSidebar` independently owns its right-opening overlay, auth-aware content/actions, close control, background, focus containment, Escape handling, and focus restoration. Its shared brand home link closes the right overlay on navigation. Sidebar state, overlay markup, and behavior remain independent; both follow the same geometry and background tokens in `docs/COLOR_SYSTEM.md`. Its footer matches the same Obsidian Glass surface and blur as its header.
@@ -30,13 +39,17 @@ These contracts describe shared presentation primitives and the authenticated do
 
 ## State ownership
 
-- URL: `/` is public before sign-in; `/home` is protected documentation.
-- Auth feature: verified identity and PAT in volatile memory only; sign-out/revocation clears both.
+- URL: `/` is public before sign-in; `/home` is protected documentation; `/backend` is a protected
+  independent workspace route and deliberately absent from visible navigation.
+- Auth feature: verified identity and PAT in active-tab memory and tab-scoped `sessionStorage`;
+  revalidates with GitHub after refresh and clears the PAT on sign-out/invalid-token response.
 - GitHub/Git: committed records, content history, and authoritative branch head.
-- Components: controlled inputs and temporary presentation state only; no direct GitHub calls, browser storage, or hidden persistence.
+- Backend route: independent header with inert controls only; no repository reads, drafts, or
+  publishing.
 
 ## Current verification
 
 - Icon registry tests cover action-to-icon keys, icon accessibility, focus, click, and disabled-state API behavior.
 - Route tests cover public access, login-to-home flow, repository page/sub-page/card rendering, drawer isolation, unknown-route fallback, signed-out protected redirects, and refusal to stay on public root while authenticated.
+- Backend route tests cover its signed-in guard and independent blank header.
 - Real authenticated browser acceptance has not yet been run against the direct GitHub implementation. The former deployment had no API and could not authenticate; that API dependency has been removed.

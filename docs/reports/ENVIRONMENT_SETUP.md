@@ -23,7 +23,7 @@ corepack pnpm@12.11.2 build
 ## GitHub-Only Runtime
 
 - GitHub is the only identity provider and live repository API. No application API, Cloud Run, Firestore, KMS, or external database is used.
-- Sign-in sends a user-entered PAT directly to GitHub over HTTPS. The app holds it in tab memory only and sends GitHub API calls only to `api.github.com`.
+- Sign-in sends a user-entered PAT directly to GitHub over HTTPS. The app holds it in tab memory and tab-scoped `sessionStorage` so refresh can restore authentication, and sends GitHub API calls only to `api.github.com`. The stored PAT remains readable by page JavaScript.
 - The PAT is never stored in environment files, GitHub Actions variables/secrets, source, logs, URLs, localStorage, IndexedDB, or Cache API.
 - The browser necessarily exposes the PAT to executing page scripts while signed in. This residual XSS/dependency risk is disclosed in the sign-in UI; users should minimize token scope and sign out promptly.
 - `.env.example` contains only the local web port; the fixed GitHub target is centralized in typed app config.
