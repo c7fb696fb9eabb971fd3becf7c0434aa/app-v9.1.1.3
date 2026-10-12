@@ -50,6 +50,7 @@ export function AppRoutes() {
   const { pathname } = useLocation();
   const normalizedPathname = pathname.replace(/\/+$/, '') || APP_ROUTES.publicHome;
   const isStudioWorkspace = normalizedPathname === APP_ROUTES.studioBase;
+  const isDocumentationHome = normalizedPathname === APP_ROUTES.home;
 
   if (normalizedPathname === APP_ROUTES.login) {
     return (
@@ -72,7 +73,7 @@ export function AppRoutes() {
   return (
     <div className="app-shell">
       {!isStudioWorkspace && <SiteHeader onLoginIntent={prefetchLoginPage} />}
-      <main className="main-content">
+      <main className={isDocumentationHome ? 'main-content main-content-home' : 'main-content'}>
         <Routes>
           <Route
             path={APP_ROUTES.publicHome}

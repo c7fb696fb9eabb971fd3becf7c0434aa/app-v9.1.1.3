@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState } from 'react';
+import { createElement, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type {
   CardRecord,
   PageRecord,
@@ -159,6 +159,63 @@ function errorMessage(error: unknown): string {
   return `Could not load the documentation (${code}).`;
 }
 
+function HomeLocationTrail() {
+  const viewport = useRef<HTMLDivElement>(null);
+  const activeDrag = useRef<{ pointerId: number; startX: number; scrollLeft: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  function startDrag(event: PointerEvent<HTMLDivElement>) {
+    const element = event.currentTarget;
+    if (
+      event.pointerType !== 'mouse' ||
+      event.button !== 0 ||
+      element.scrollWidth <= element.clientWidth
+    ) {
+      return;
+    }
+    activeDrag.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: element.scrollLeft,
+    };
+    setIsDragging(true);
+    element.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveTrail(event: PointerEvent<HTMLDivElement>) {
+    const drag = activeDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.currentTarget.scrollLeft = drag.scrollLeft - (event.clientX - drag.startX);
+  }
+
+  function stopDrag(event: PointerEvent<HTMLDivElement>) {
+    if (activeDrag.current?.pointerId !== event.pointerId) return;
+    activeDrag.current = null;
+    setIsDragging(false);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }
+
+  return (
+    <nav className="home-location-bar" aria-label="Current location">
+      <div
+        ref={viewport}
+        className={`home-location-track${isDragging ? 'is-dragging' : ''}`}
+        tabIndex={0}
+        onPointerDown={startDrag}
+        onPointerMove={moveTrail}
+        onPointerUp={stopDrag}
+        onPointerCancel={stopDrag}
+      >
+        <ol>
+          <li aria-current="page">
+            <h1 id="home-title">Home</h1>
+          </li>
+        </ol>
+      </div>
+    </nav>
+  );
+}
+
 export function HomePage() {
   const { githubRequest } = useAuth();
   const client = useMemo(() => createGitHubRepositoryClient(githubRequest), [githubRequest]);
@@ -190,35 +247,35 @@ export function HomePage() {
   const pageTree = useMemo(() => buildPageTree(snapshot?.pages ?? []), [snapshot]);
   return (
     <section className="documentation-home" aria-labelledby="home-title">
-      <header className="documentation-home-nav">
-        <h1 id="home-title">Home</h1>
-      </header>
-      {loading && (
-        <p className="status-message" role="status">
-          Loading pages and cards from GitHub…
-        </p>
-      )}
-      {error && (
-        <div className="status-message status-error" role="alert">
-          <p>{error}</p>
-          <Button type="button" onClick={() => setReload((value) => value + 1)}>
-            Try again
-          </Button>
-        </div>
-      )}
-      {!loading && !error && snapshot && (
-        <div className="published-page-tree">
-          {pageTree.map((page) => (
-            <PageView
-              key={page.id}
-              page={page}
-              cards={snapshot.cards}
-              snapshot={snapshot}
-              level={1}
-            />
-          ))}
-        </div>
-      )}
+      <HomeLocationTrail />
+      <div className="documentation-home-content">
+        {loading && (
+          <p className="status-message" role="status">
+            Loading pages and cards from GitHub…
+          </p>
+        )}
+        {error && (
+          <div className="status-message status-error" role="alert">
+            <p>{error}</p>
+            <Button type="button" onClick={() => setReload((value) => value + 1)}>
+              Try again
+            </Button>
+          </div>
+        )}
+        {!loading && !error && snapshot && (
+          <div className="published-page-tree">
+            {pageTree.map((page) => (
+              <PageView
+                key={page.id}
+                page={page}
+                cards={snapshot.cards}
+                snapshot={snapshot}
+                level={1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

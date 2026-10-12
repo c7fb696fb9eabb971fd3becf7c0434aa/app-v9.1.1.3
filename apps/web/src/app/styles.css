@@ -139,6 +139,9 @@ input:focus-visible {
   position: sticky;
   top: 0;
   z-index: 50;
+}
+.site-header,
+.home-location-bar {
   width: 100%;
   height: 56px;
   flex: 0 0 56px;
@@ -221,6 +224,10 @@ input:focus-visible {
   margin: 0 auto;
   padding: 32px 0 64px;
 }
+.main-content-home {
+  width: 100%;
+  padding: 0 0 64px;
+}
 .home-panel,
 .login-panel,
 .studio-panel {
@@ -249,36 +256,68 @@ input:focus-visible {
   line-height: 1.65;
 }
 .documentation-home {
-  width: min(100%, 1180px);
-  margin: 0 auto;
+  width: 100%;
 }
-.documentation-home-nav {
+.home-location-bar {
+  display: grid;
+  place-items: center;
+}
+.home-location-track {
+  width: min(680px, calc(100% - 48px));
+  height: calc(100% - 8px);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--canvas);
+  scrollbar-width: none;
+  cursor: grab;
+}
+.home-location-track::-webkit-scrollbar {
+  display: none;
+}
+.home-location-track.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.home-location-track ol {
   display: flex;
+  width: max-content;
+  min-width: 100%;
+  height: 100%;
   align-items: center;
-  min-height: 46px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--line);
-}
-.documentation-home-nav h1 {
+  justify-content: center;
   margin: 0;
-  padding: 0 14px 12px;
-  border-bottom: 2px solid var(--accent-bright);
-  color: var(--text-strong);
+  padding: 0 16px;
+  list-style: none;
+}
+.home-location-track li {
+  flex: 0 0 auto;
+}
+.home-location-track h1 {
+  margin: 0;
+  color: var(--accent-bright);
   font-size: 13px;
   font-weight: 600;
 }
-.documentation-home > .status-message {
+.documentation-home-content {
+  width: min(100% - 48px, 1180px);
+  margin: 0 auto;
+  padding-top: 24px;
+}
+.documentation-home-content > .status-message {
   margin: 0 0 16px;
 }
-.documentation-home > .status-error {
+.documentation-home-content > .status-error {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.documentation-home > .status-error p {
+.documentation-home-content > .status-error p {
   margin: 0;
 }
-.documentation-home > .status-error .action-button {
+.documentation-home-content > .status-error .action-button {
   flex: 0 0 auto;
 }
 .documentation-home .published-page-tree:empty {
@@ -1492,6 +1531,16 @@ input:focus-visible {
   .main-content {
     width: min(100% - 24px, 1520px);
     padding-top: 20px;
+  }
+  .main-content-home {
+    width: 100%;
+    padding-top: 0;
+  }
+  .home-location-track {
+    width: calc(100% - 32px);
+  }
+  .documentation-home-content {
+    width: calc(100% - 24px);
   }
   .login-main {
     width: min(100% - 24px, 1520px);
