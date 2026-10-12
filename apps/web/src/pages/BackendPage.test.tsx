@@ -25,14 +25,16 @@ describe('BackendPage', () => {
         .getByRole('button', { name: 'Github Sync' })
         .querySelector('.backend-live-preview-dot'),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'GitHub sync', exact: true }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument();
     expect(leftPanel.querySelector('.backend-workspace-panel-content')).toBeInTheDocument();
     expect(rightPanel.querySelector('.backend-workspace-panel-header')).toBeInTheDocument();
     expect(rightPanel.querySelector('.backend-workspace-panel-content')).toBeInTheDocument();
     expect(rightPanel.querySelector('.backend-workspace-panel-footer')).toBeInTheDocument();
-    expect(buttons.slice(0, 7).map((button) => button.textContent)).toEqual([
+    expect(buttons.slice(0, 6).map((button) => button.textContent)).toEqual([
       'Back to home',
-      'GitHub sync',
       'Deployments',
       'Github Sync',
       'Select',
@@ -48,7 +50,7 @@ describe('BackendPage', () => {
     expect(
       screen
         .getAllByRole('button')
-        .slice(8)
+        .slice(7)
         .map((button) => button.getAttribute('aria-label')),
     ).toEqual([
       'Preview card',

@@ -117,9 +117,6 @@ export function BackendPage() {
           <h1 className="backend-header-title">Backend</h1>
           <div className="backend-header-actions">
             <Button type="button" className="backend-header-button">
-              GitHub sync
-            </Button>
-            <Button type="button" className="backend-header-button">
               Deployments
             </Button>
           </div>
