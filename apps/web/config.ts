@@ -4,8 +4,6 @@ export const APP_ROUTES = {
   publicHome: '/',
   home: '/home',
   login: '/login',
-  studio: '/studio/*',
-  studioBase: '/studio',
 } as const;
 
 export const GITHUB_API_ORIGIN = 'https://api.github.com';

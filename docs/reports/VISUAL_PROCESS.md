@@ -24,8 +24,6 @@ Use `docs/COLOR_SYSTEM.md` as the source of truth for the current design tokens 
 - Use semantic design tokens in CSS variables; components must not copy raw color values throughout JSX.
 - Cards and controls use the documented border, opacity, and focus treatment. Hover feedback is a soft white glass tint covering the whole button, not an edge highlight or emerald fill; keyboard focus and disabled states remain explicitly visible.
 - Maintain the compact technical look, but make information hierarchy, contrast, and touch targets readable at mobile widths.
-- Hierarchy tree: dense, scannable rows with visible parent/child indentation, selected state, and explicit actions. Avoid an expanding nesting of decorative cards.
-- Editor: sections for target page, card content, attachments, preview, and publish review. Keep publish separate from save-to-draft.
 - Modals/dialogs: clear title, focus management, Escape handling, visible close control, and no nested-card visual framing.
 - Use icons consistently for icon-only actions and provide accessible labels/tooltips; text labels remain for destructive or high-impact commands.
 

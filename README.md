@@ -4,10 +4,9 @@ Git-backed documentation authoring and publishing workspace. GitHub is the sole 
 
 ## Workspace
 
-- `apps/web`: Vite/React public site and protected Studio UI, deployed to GitHub Pages.
+- `apps/web`: Vite/React public site, deployed to GitHub Pages.
 - `packages/contracts`: shared record and publish contracts.
 - `packages/content-schema`: page/card/asset validation and storage-path rules.
-- `TODO/`: implementation backlog and acceptance checks.
 
 ## Local Commands
 
@@ -37,6 +36,4 @@ Pushes to `main` run CI and deploy `apps/web` to GitHub Pages through `.github/w
 - `/#/home` displays the repository's pages, nested sub-pages, and cards.
 - An empty documentation repository leaves `/home` clear rather than showing a welcome or empty-state panel.
 - Authenticated users visiting `/` are redirected to `/home`; the header home control also points to `/home`.
-- `/#/studio` is a protected developer-only route. It is intentionally not linked in the landing page, documentation home, header, or drawer; developers enter it manually.
-- Studio provides a page/card hierarchy explorer, fixed-target GitHub sync status, and a `/studio/deployments` page for recent GitHub Actions runs.
-- Signed-out visits to `/home` or `/studio` return to `/`.
+- Unknown routes return to the public landing page when signed out and `/home` when authenticated.

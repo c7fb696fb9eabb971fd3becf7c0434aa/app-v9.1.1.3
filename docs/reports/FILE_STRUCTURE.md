@@ -6,7 +6,7 @@
 |   `-- web/                     # React UI; deployed to GitHub Pages
 |       |-- src/
 |       |   |-- app/             # Routes, shell, providers
-|       |   |-- features/        # auth, github, navigation, studio
+|       |   |-- features/        # auth, github, navigation
 |       |   |-- components/      # shared UI and design primitives
 |       |   `-- lib/             # browser-only helpers
 |       `-- index.html

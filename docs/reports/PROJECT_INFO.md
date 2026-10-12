@@ -12,7 +12,7 @@
 ## Operating Rules
 
 1. Git is authoritative for pages, cards, attachments, and history.
-2. The browser verifies the real GitHub identity and repository push permission before entering Studio.
+2. The browser verifies the real GitHub identity and repository push permission before entering the application.
 3. The browser holds the user's PAT in active-tab memory only and calls GitHub directly. No separate application API or external service is used.
 4. Publish validates the full change set and creates one non-force Git commit against the expected branch head.
 5. GitHub Actions builds and deploys the static app to GitHub Pages. The commit SHA and workflow result identify publication/deployment state.

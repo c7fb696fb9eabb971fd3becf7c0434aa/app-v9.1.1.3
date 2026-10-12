@@ -13,7 +13,7 @@ describe('route error boundary', () => {
     const eventLog = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       render(
-        <RouteErrorBoundary route="studio">
+        <RouteErrorBoundary route="home">
           <FailingRoute />
         </RouteErrorBoundary>,
       );

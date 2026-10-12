@@ -35,7 +35,7 @@ describe('public route and drawer', () => {
     expect(screen.queryByRole('link', { name: /sign in with github/i })).not.toBeInTheDocument();
   });
 
-  it('offers login in the right drawer and does not expose Studio navigation', async () => {
+  it('offers login in the right drawer', async () => {
     renderAt('/');
     fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
     const drawer = screen.getByRole('dialog', { name: 'Right navigation' });
@@ -43,7 +43,6 @@ describe('public route and drawer', () => {
     expect(drawer.querySelector('.right-sidebar-content')).toBeInTheDocument();
     expect(drawer.querySelector('.right-sidebar-footer')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Log in with GitHub' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /secret studio/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: 'Log in with GitHub' }));
     expect(await screen.findByRole('heading', { name: 'Authenticate' })).toBeInTheDocument();
   });
@@ -99,10 +98,9 @@ describe('public route and drawer', () => {
     expect(menu).toHaveFocus();
   });
 
-  it('redirects a direct Studio route to the public landing page when signed out', async () => {
-    renderAt('/studio');
+  it('redirects unknown routes to the public landing page when signed out', async () => {
+    renderAt('/removed-route');
     expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Secret Studio' })).not.toBeInTheDocument();
   });
 
   it('redirects signed-out visits to the authenticated home to the public landing page', async () => {

@@ -7,7 +7,7 @@ Use this directory to bring a coding agent up to speed on the GreenDocs workspac
 1. Read [Project access and security](./PROJECT_ACCESS.md) for canonical repository/site URLs and credential boundaries.
 2. Read [Local environment and tools](./LOCAL_ENVIRONMENT.md) for the workspace, supported commands, and install-approval process.
 3. Read [Execution and delegation](./EXECUTION_AND_DELEGATION.md) for concise work, verification, agent handoffs, and Git side-effect rules.
-4. Read the project [README](../README.md), relevant architecture/security docs under `docs/`, and the active acceptance criteria in `TODO/`.
+4. Read the project [README](../README.md) and relevant architecture/security docs under `docs/`.
 5. Inspect the current branch, worktree, and task-related code before editing. Preserve pre-existing user changes.
 
 ## Workspace Agent Files
@@ -18,6 +18,5 @@ Use this directory to bring a coding agent up to speed on the GreenDocs workspac
 ## Current Project Snapshot
 
 - GreenDocs is a Git-backed documentation editor and publisher; GitHub is the identity, source-control, content, and Pages platform.
-- The production branch is `main`. The application has a public home, authenticated documentation home, manually addressed protected Studio, and a distinct Studio Deployments route.
-- Studio is actively being redesigned. Consult `TODO/17_STUDIO_REFERENCE_IMPLEMENTATION.md`; the prior deployed layout was explicitly rejected and must not be represented as visually accepted.
+- The production branch is `main`. The application has a public landing page and an authenticated documentation home.
 - Do not perform production content writes or deployment smoke tests without explicit approval of the exact operation.

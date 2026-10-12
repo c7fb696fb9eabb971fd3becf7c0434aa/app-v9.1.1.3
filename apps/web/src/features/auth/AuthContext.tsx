@@ -111,14 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           redirect: 'error',
         });
       } catch {
-        reportClientEvent('github_request_failure', 'studio');
+        reportClientEvent('github_request_failure', 'home');
         throw new Error('github_unavailable');
       }
       if (response.status === 401) {
         clearAuth();
-        reportClientEvent('github_auth_expired', 'studio');
+        reportClientEvent('github_auth_expired', 'home');
       } else if (!response.ok) {
-        reportClientEvent('github_request_failure', 'studio', { status: response.status });
+        reportClientEvent('github_request_failure', 'home', { status: response.status });
       }
       return response;
     },

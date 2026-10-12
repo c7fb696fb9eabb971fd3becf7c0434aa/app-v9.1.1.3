@@ -12,11 +12,8 @@ const loadLoginPage = () =>
   import('../pages/LoginPage').then((module) => ({ default: module.LoginPage }));
 const loadHomePage = () =>
   import('../pages/HomePage').then((module) => ({ default: module.HomePage }));
-const loadStudioPage = () =>
-  import('../pages/StudioPage').then((module) => ({ default: module.StudioPage }));
 const LoginPage = lazy(loadLoginPage);
 const HomePage = lazy(loadHomePage);
-const StudioPage = lazy(loadStudioPage);
 
 function canPrefetch(): boolean {
   if (typeof navigator === 'undefined' || !navigator.onLine) return false;
@@ -49,8 +46,8 @@ export function AppRoutes() {
   const { user } = useAuth();
   const { pathname } = useLocation();
   const normalizedPathname = pathname.replace(/\/+$/, '') || APP_ROUTES.publicHome;
-  const isStudioWorkspace = normalizedPathname === APP_ROUTES.studioBase;
   const isDocumentationHome = normalizedPathname === APP_ROUTES.home;
+  const mainContentClass = isDocumentationHome ? 'main-content main-content-home' : 'main-content';
 
   if (normalizedPathname === APP_ROUTES.login) {
     return (
@@ -72,8 +69,8 @@ export function AppRoutes() {
 
   return (
     <div className="app-shell">
-      {!isStudioWorkspace && <SiteHeader onLoginIntent={prefetchLoginPage} />}
-      <main className={isDocumentationHome ? 'main-content main-content-home' : 'main-content'}>
+      <SiteHeader onLoginIntent={prefetchLoginPage} />
+      <main className={mainContentClass}>
         <Routes>
           <Route
             path={APP_ROUTES.publicHome}
@@ -94,18 +91,6 @@ export function AppRoutes() {
                 <RouteErrorBoundary route="home">
                   <Suspense fallback={<LoadingRoute />}>
                     <HomePage />
-                  </Suspense>
-                </RouteErrorBoundary>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path={APP_ROUTES.studio}
-            element={
-              <ProtectedRoute>
-                <RouteErrorBoundary route="studio">
-                  <Suspense fallback={<LoadingRoute />}>
-                    <StudioPage />
                   </Suspense>
                 </RouteErrorBoundary>
               </ProtectedRoute>
