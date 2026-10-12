@@ -7,6 +7,8 @@
 - Do not claim work is complete based only on a build or unit test when browser, visual, integration, or production acceptance is required.
 - Preserve user changes and report blockers or unverified behavior plainly. Ask only when an unresolved choice materially affects the result or permission.
 - The project owner authorizes use of available local and GitHub tools for project work. Do not commit or push unless the current user request explicitly asks for that side effect; that explicit request is sufficient authorization for the requested operation. Before doing so, inspect staged changes, run relevant checks, and confirm no unrelated changes are included. Never force-push.
+- For local app requests, start with `corepack pnpm@12.11.2 dev` immediately. When the VS Code integrated browser is available, open the local URL from Vite and the configured deployed URL in it rather than making the user copy URLs from chat. Do not run port or public-site probes first; troubleshoot only after an actual startup failure.
+- For explicitly requested Git operations, reuse the configured repository and credentials. Check only the current repo/worktree, requested target, and commit identity if needed; do not repeat wiring/authentication or run extra connectivity checks. Execute the requested operation and report its actual result. Stop only for a concrete failure or an ambiguous target.
 
 ## Delegation Preference
 

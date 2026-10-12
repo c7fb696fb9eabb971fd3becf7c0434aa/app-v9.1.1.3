@@ -13,7 +13,18 @@ Keep these project values together and in this order:
 - GitHub API origin: `https://api.github.com`
 - Repository binding: `c7fb696fb9eabb971fd3becf7c0434aa/app-v9.1.1.3`
 
-The current workspace clone has an `origin` remote configured. A future agent must verify its actual working directory, branch, remote, and Git permissions rather than assuming that every environment has the same clone or credentials.
+The configured project clone is already wired to the repository's `origin`. In this environment,
+use the existing workspace and Git authentication directly; do not repeat clone, remote, credential,
+or OAuth setup. At the point a Git operation is requested, make only the brief checks needed for
+that operation: confirm the repository/worktree, target branch and remote, and (for a commit) Git
+author identity. Do not run separate network or push-permission probes when the requested operation
+can establish access.
+
+The remote being configured does not prove that the current session has push permission. An
+explicit user request authorizes the requested commit/push; perform it and report the actual result.
+If the target is unclear or Git reports missing identity/authentication/permission, stop and report
+that specific blocker. Never reconfigure credentials, ask for secrets in chat, force-push, or
+silently choose a different remote/branch.
 
 ## Owner-Authorized Tool Use
 

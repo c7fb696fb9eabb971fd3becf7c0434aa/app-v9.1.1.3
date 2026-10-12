@@ -1,21 +1,41 @@
-# Application Process
+# Application Process Snapshot
 
-## 1. GitHub Sign-In
+This describes currently implemented runtime behavior. The current architecture source is
+[System Architecture](../ARCHITECTURE.md); product availability is recorded in the
+[Product Brief](../PRODUCT_BRIEF.md).
 
-1. The user enters a GitHub PAT in the login page.
-2. The browser sends it directly over HTTPS to `api.github.com/user` and the fixed repository metadata endpoint.
-3. The app displays GitHub's actual login/account ID and proceeds only if the repository response grants push permission.
-4. The credential remains in a closure-backed memory reference. Sign-out, GitHub 401, or closing the tab clears access. Reload requires sign-in again.
-5. Successful sign-in always redirects to `/#/home`; if an authenticated user visits `/#/`, the app redirects them back to `/home`.
+## 1. GitHub sign-in
 
-## 2. Read and Render
+1. The user enters a GitHub PAT on the dedicated login route.
+2. The browser sends it directly to `api.github.com/user` and the configured repository metadata
+   endpoint.
+3. The application displays the GitHub identity returned by `/user` and proceeds only when GitHub
+   reports repository push permission.
+4. The PAT is held in a React ref in active-tab memory. Sign-out or a GitHub 401 clears it. Reload
+   requires signing in again.
+5. Successful sign-in navigates to `/#/home`; an authenticated visit to `/#/` redirects to
+   `/home`.
 
-- `/home` reads the configured GitHub branch ref, commit/tree, and page/card blobs, then renders pages, sub-pages, and cards.
-- Content records are validated with the shared schema; assets and hierarchy are resolved from stable IDs and explicit relationships.
-- A source commit SHA identifies the snapshot used for editing.
+## 2. Read and render
 
-## 3. Operations
+- `/home` reads the configured branch ref, commit, recursive tree, and page/card blobs through
+  GitHub's Git Database API.
+- Records and relationships are validated by the shared content schema before rendering.
+- The Home page renders repository pages, nested pages, cards, and supported attachments.
+- The source commit SHA identifies the read snapshot. This does not imply that browser editing or
+  draft reconciliation is implemented.
 
-- No server-side logs, session database, external storage, or cloud runtime exists.
-- Git commit history is the audit and recovery trail; browser drafts are transient.
-- Rate limits, payload limits, fixed repository paths, schema validation, and expected-head checks apply before repository writes.
+## 3. Repository publishing capability
+
+`GitHubRepositoryClient.publish` validates a complete mutation batch, checks the expected branch
+head, creates a Git tree and commit, and updates the configured ref without force. Unit tests cover
+the operation. No production application component currently invokes it; there is no editor/publish
+screen.
+
+## 4. Persistence and service boundaries
+
+- There is no application API, server-side session, content database, or cloud runtime.
+- GitHub is authoritative for committed repository content and commit history.
+- The application does not persist authentication or browser drafts across reloads.
+- Rate limits, payload limits, fixed repository paths, schema validation, and expected-head checks
+  constrain repository access and writes.

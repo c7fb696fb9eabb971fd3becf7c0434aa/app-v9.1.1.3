@@ -1,39 +1,49 @@
 # GreenDocs
 
-Git-backed documentation authoring and publishing workspace. GitHub is the sole identity provider, content store, source-control host, and deployment platform.
+GreenDocs is a GitHub-backed documentation workspace. The current web app authenticates a user
+against the configured repository and renders its validated pages, nested pages, cards, and
+attachments. The repository client also contains a tested atomic publish operation, but the
+application does not yet expose a documentation editor or publish UI.
+
+## Start here
+
+- [Product brief](docs/PRODUCT_BRIEF.md): purpose, audience, product constraints, current
+  implementation, and authoritative scope source.
+- [System architecture](docs/ARCHITECTURE.md): current runtime, ownership boundaries, data flow,
+  and security invariants.
+- [Operations guide](docs/OPERATIONS.md): setup, checks, release/deployment, support, and security.
+- [Documentation index](docs/README.md): canonical docs, ADRs, domain references, and maintainers.
+- [Agent onboarding](AGENTIC/README.md): warm-up order, environment, project access, and execution
+  guidance.
 
 ## Workspace
 
-- `apps/web`: Vite/React public site, deployed to GitHub Pages.
-- `packages/contracts`: shared record and publish contracts.
-- `packages/content-schema`: page/card/asset validation and storage-path rules.
+- `apps/web`: Vite/React static SPA deployed to GitHub Pages.
+- `packages/contracts`: shared record, repository, and publish contracts.
+- `packages/content-schema`: record validation, content limits, hierarchy, and safe storage paths.
 
-## Local Commands
+## Local commands
 
 Use the project-pinned package manager with Corepack:
 
 ```powershell
-corepack pnpm@12.11.2 install
+corepack pnpm@12.11.2 install --frozen-lockfile
 corepack pnpm@12.11.2 dev
 corepack pnpm@12.11.2 lint
 corepack pnpm@12.11.2 typecheck
 corepack pnpm@12.11.2 test
 corepack pnpm@12.11.2 build
+corepack pnpm@12.11.2 format:check
 ```
 
-The browser verifies the user by calling GitHub's `/user` API with the PAT, checks push permission on the fixed repository, and uses the token for GitHub Git Database API reads and atomic commits. The token is held only in the active tab's memory; it is not persisted and is cleared on sign-out, API rejection, or tab close. Reloading requires signing in again.
-
-**Security trade-off:** this GitHub-only design necessarily exposes the entered PAT to JavaScript running in the page while signed in. Any XSS or compromised dependency could act with that token's GitHub permissions. Use a dedicated token with the least available repository scope, do not use an account-wide token unnecessarily, sign out after editing, and revoke the token in GitHub if it may be compromised. GitHub Pages cannot provide a server-side secret boundary.
+GitHub is the only identity, content, source-control, and deployment platform. The browser sends
+the user-entered PAT directly to GitHub and holds it in active-tab memory only. Because JavaScript
+in the signed-in page can use that PAT, use a least-privilege credential, sign out after use, and
+revoke it if compromise is suspected. Never place credentials in source, environment files, URLs,
+browser storage, logs, or build output.
 
 ## Deployment
 
-Pushes to `main` run CI and deploy `apps/web` to GitHub Pages through `.github/workflows/deploy-pages.yml`. There is no separate API service, Cloud project, external database, or API-origin setting.
-
-## Route Flow
-
-- `/#/` is the public landing page before sign-in.
-- Successful GitHub sign-in always redirects to `/#/home`.
-- `/#/home` displays the repository's pages, nested sub-pages, and cards.
-- An empty documentation repository leaves `/home` clear rather than showing a welcome or empty-state panel.
-- Authenticated users visiting `/` are redirected to `/home`; the header home control also points to `/home`.
-- Unknown routes return to the public landing page when signed out and `/home` when authenticated.
+Pull requests and pushes to `main` run CI. Pushes to `main` also build and deploy `apps/web` to
+GitHub Pages. A commit, successful CI run, and successful deployment are separate states; verify
+each independently. See the [Operations guide](docs/OPERATIONS.md).

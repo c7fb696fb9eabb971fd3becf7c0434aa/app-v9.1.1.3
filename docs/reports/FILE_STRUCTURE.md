@@ -1,35 +1,31 @@
-# Proposed File Structure
+# Repository Structure Snapshot
+
+This snapshot reflects the checked-in workspace as of 2026-10-12. For the system relationships,
+responsibilities, and data flow, see the canonical [System Architecture](../ARCHITECTURE.md).
 
 ```text
 /
-|-- apps/
-|   `-- web/                     # React UI; deployed to GitHub Pages
-|       |-- src/
-|       |   |-- app/             # Routes, shell, providers
-|       |   |-- features/        # auth, github, navigation
-|       |   |-- components/      # shared UI and design primitives
-|       |   `-- lib/             # browser-only helpers
-|       `-- index.html
-|-- packages/
-|   |-- contracts/               # Shared record/publish types
-|   `-- content-schema/          # Page/card/asset schemas and validators
-|-- content/                     # Git source of truth
-|   |-- pages/<page-id>.json
-|   |-- cards/<card-id>.json
-|   `-- media/<asset-id>.<ext>
-|-- docs/
-|-- .github/workflows/
-|   |-- ci.yml
-|   `-- deploy-pages.yml
-|-- .vscode/
-|-- pnpm-workspace.yaml
-|-- package.json
-|-- pnpm-lock.yaml
-|-- tsconfig.base.json
-|-- .editorconfig
-`-- README.md
+|-- apps/web/                    # React/Vite static SPA
+|   |-- src/app/                 # Router, providers, route boundaries, styles
+|   |-- src/features/auth/       # GitHub identity, permission, in-memory PAT
+|   |-- src/features/github/     # Fixed-repository GitHub read/publish client
+|   |-- src/features/navigation/ # Header and independent sidebars
+|   |-- src/components/          # Shared UI primitives and icon catalog
+|   `-- src/pages/               # Public landing, login, repository documentation home
+|-- packages/contracts/          # Shared TypeScript and runtime contracts
+|-- packages/content-schema/     # Zod schemas, validation, IDs, paths, hierarchy
+|-- scripts/                     # Deterministic repository quality checks
+|-- docs/                        # Product, architecture, operations, domain docs, ADRs
+|-- AGENTIC/                     # Agent onboarding, access, environment, execution rules
+|-- .github/                     # Shared Copilot instructions, agents, skills, workflows
+|-- .vscode/                     # Development tasks and Chrome launch config
+|-- package.json                 # Pinned pnpm workspace scripts and Node engine
+`-- pnpm-lock.yaml               # Locked dependencies
 ```
 
-Stable IDs and explicit parent relationships define hierarchy; filenames are storage details only. Titles and slugs are never trusted file paths.
+There is no checked-in `apps/api`, `content/` tree, editor UI, persisted draft store, or current
+publish UI. The browser's publish client is a tested implementation building block, not an
+available authoring screen. Generated output and installed dependencies are not source files.
 
-Build output (`apps/web/dist`) is generated and ignored. Never commit credentials, generated bundles, caches, or user uploads outside the content workflow.
+Repository content, when present, uses stable-ID paths (`content/pages/`, `content/cards/`, and
+`content/media/`). The root package manager workspace is configured by `pnpm-workspace.yaml`.
