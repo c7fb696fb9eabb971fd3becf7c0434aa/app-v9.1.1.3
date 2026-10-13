@@ -8,7 +8,7 @@ GitHub, browser, or credential access; verify the active environment and permiss
 - Windows 10/11 workspace, PowerShell recommended.
 - Node.js `24.21.0`, pinned in `.node-version`.
 - Corepack with pnpm `12.11.2`, pinned in the root `packageManager`.
-- The root pnpm workspace contains `apps/web`, `packages/contracts`, and
+- The root pnpm workspace contains the web application plus `packages/contracts` and
   `packages/content-schema`.
 - No application API process or separate database is part of the current workspace.
 
@@ -74,7 +74,8 @@ GitHub Actions runs formatting, lint, typecheck, tests, and build for pull reque
 
 - `main` is the configured production branch.
 - A push to `main` starts CI and the GitHub Pages deployment workflow.
-- The Pages workflow builds `apps/web` and deploys its static `dist` artifact.
+- The Pages workflow builds the repository-root web application and deploys its static `dist`
+  artifact.
 - A commit does not itself prove CI or deployment succeeded. Verify each state from the matching
   workflow run and deployed site.
 - Use an approved test repository/branch for write acceptance. Never use production content for

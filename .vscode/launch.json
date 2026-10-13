@@ -6,8 +6,8 @@
       "type": "pwa-chrome",
       "request": "launch",
       "url": "http://localhost:5173/",
-      "webRoot": "${workspaceFolder}/apps/web/src",
-      "preLaunchTask": "GreenDocs: Web dev server"
+      "webRoot": "${workspaceFolder}/src",
+      "preLaunchTask": "GreenDocs: dev server"
     }
   ]
 }

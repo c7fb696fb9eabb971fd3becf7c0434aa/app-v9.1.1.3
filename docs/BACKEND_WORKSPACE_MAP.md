@@ -1,8 +1,8 @@
 # Backend Workspace Visual Map
 
 This is an as-built map of the protected `/#/backend` route, checked against
-[`BackendPage.tsx`](../apps/web/src/pages/BackendPage.tsx) and its styles in
-[`styles.css`](../apps/web/src/app/styles.css) on 2026-10-13. It describes the visible structure,
+[`BackendPage.tsx`](../src/pages/BackendPage.tsx) and its styles in
+[`styles.css`](../src/app/styles.css) on 2026-10-13. It describes the visible structure,
 nesting, sizing rules, and current interaction boundaries; it is not a proposal for a future editor.
 
 ## At a glance
@@ -139,13 +139,47 @@ flowchart LR
     GUARD --> ERROR["RouteErrorBoundary: backend"]
     ERROR --> SUSPENSE["Suspense: lazy BackendPage"]
     SUSPENSE --> PAGE["BackendPage"]
-    PAGE --> LOCAL["Route-local state<br/>openPanel · toolbarOffset"]
-    PAGE --> VIEW["Independent shell + workspace DOM"]
+    PAGE --> STATE["Route state<br/>openPanel + focus refs"]
+    PAGE --> HEADER["WorkspacePageHeader"]
+    PAGE --> FRAME["WorkspaceFrame"]
+    FRAME --> PANEL1["WorkspacePanel · selection"]
+    FRAME --> PANEL2["WorkspacePanel · preview"]
+    PANEL1 --> SYNC["GitHubSyncDialog"]
+    PANEL2 --> SUMMARY["CardSummary"]
+    PANEL2 --> CONNECTOR["CardConnector"]
+    PANEL2 --> CARD["CardPreview"]
+    CARD --> TOOLBAR["ActionToolbar"]
+    PAGE --> CONFIG["backendWorkspaceConfig<br/>copy + toolbar action data"]
 ```
 
-The route guard owns authentication access; `BackendPage` owns only local overlay visibility,
-toolbar translation, and focus/drag refs. The workspace does not fetch repository records or read
+The route guard owns authentication access. `BackendPage` composes the exported shared components,
+provides workspace-specific copy, classes, and callbacks, and owns overlay visibility plus trigger
+focus refs. `ActionToolbar`, `CardPreview`, and `GitHubSyncDialog` own their local drag, notes, and
+temporary token state respectively. The workspace does not fetch repository records or read
 authentication state.
+
+### Reusable component contracts
+
+The reusable components are exported through
+[`components/index.ts`](../src/components/index.ts); backend-specific display copy and
+toolbar action definitions live in
+[`backendWorkspaceConfig.ts`](../src/pages/backendWorkspaceConfig.ts). Callers provide
+labels/content, class-name maps, child slots, repository target data, and event callbacks instead of
+embedding the backend route's text and CSS selectors in shared layout components.
+
+| Component | Inputs and responsibility | State / behavior |
+| --- | --- | --- |
+| `WorkspacePageHeader` | Title, start/action slots, accessible label, class map | Renders the independent page header; optional inert state is caller-controlled. |
+| `WorkspaceFrame` | Panel children, accessible label, optional overlay and class map | Defines the frame and panels slot; caller controls inert state. |
+| `WorkspacePanel` | Header/content/footer slots, optional overlay, layout mode, class map | Defines a panel's three regions; caller controls its inert state. |
+| `WorkspaceActionButton` | Visible label, optional icon/status indicator, native button attributes and callback | Native button behavior is supplied by props. |
+| `AnchoredDialog` | ID, accessible label, content, close callback, focus refs and optional modal behavior | Owns dialog focus setup/restoration, Escape, and optional Tab containment. |
+| `ActionToolbar` | Accessible label, action definitions, class map | Owns pointer-drag offset and click suppression; each action may provide a callback. |
+| `CardSummary` / `CardPreview` / `CardConnector` | Summary or preview data, icons, action list, labels, class maps | Preview owns its notes field; toolbar behavior is composed through `ActionToolbar`. |
+| `GitHubSyncDialog` | Repository target, copy, close/test/save callbacks, class map | Owns the transient password-field value; it does not persist credentials or test GitHub access itself. |
+
+These are reusable UI primitives, not a finished authoring system: the page currently supplies no
+toolbar action handlers, and its GitHub Sync test callback only closes the dialog.
 
 ## Panel construction
 
@@ -275,9 +309,10 @@ available row while remaining at least 120px tall. A 12px gap separates every co
 content box has 12px padding and clips excess content (`overflow: hidden`). Each field label is a
 grid with a 5px label-to-input gap. The inputs fill the available width and are 41px high.
 
-This is currently a visual scaffold, not a working connection flow. The PAT field is not wired to
-authentication or persistence. The Connection Test footer button currently dismisses the dialog;
-it does not test a connection. Save & Connect is disabled.
+This is currently a visual scaffold, not a working connection flow. `GitHubSyncDialog` owns the
+password field's temporary component state, but the page does not wire the token to authentication
+or persistence. The Connection Test callback currently dismisses the dialog; it does not test a
+connection. Save & Connect is disabled.
 
 ### Workspace panel 2: preview and card-editor scaffold
 
@@ -366,9 +401,9 @@ flowchart LR
 ```
 
 `openPanel` is the single owner for both overlay visibility and the `aria-expanded` value on each
-trigger. On open, the effect moves focus to that overlay's close button. On close, cleanup restores
-focus to the previously active element, or falls back to the corresponding trigger when no usable
-previous element exists.
+trigger. `AnchoredDialog` moves focus to the first enabled control when mounted. On close, its
+cleanup restores focus to the previously active element, or falls back to the supplied trigger ref
+when no usable previous element exists.
 
 ### Inert regions while an overlay is open
 
@@ -398,11 +433,12 @@ currently implements backdrop-click dismissal.
 | Card toolbar actions | 15 buttons with labels/icons/titles, but no action handlers. |
 | Notes-or-commands field | Plain text input; no save or command handler. |
 
-The toolbar's horizontal dragging is the only non-overlay interaction with component state:
-pointer-down records pointer ID, X origin, and current offset, then captures the pointer; pointer
-movement clamps the translated track between zero and the maximum overflow; pointer-up releases
-capture. Movement greater than 3px marks the gesture as a drag and suppresses the resulting click.
-Pointer cancellation clears the drag state.
+The toolbar's horizontal dragging is handled by `ActionToolbar` and is separate from page-level
+overlay state. Pointer-down records pointer ID, X origin, and current offset, then captures the
+pointer; pointer movement clamps the translated track between zero and the maximum overflow;
+pointer-up releases capture. Movement greater than 3px marks the gesture as a drag and suppresses
+the resulting click. Pointer cancellation clears the drag state. `CardPreview` separately owns the
+notes input value, and `GitHubSyncDialog` owns its temporary token input value; neither is persisted.
 
 ```text
 pointerdown(button 0)
@@ -412,7 +448,7 @@ pointermove(same pointer)
   → delta = currentX - startX
   → moved = true when abs(delta) > 3px
   → maxOffset = max(0, track.scrollWidth - viewport.clientWidth)
-  → toolbarOffset = clamp(startOffset + delta, -maxOffset, 0)
+  → offset = clamp(startOffset + delta, -maxOffset, 0)
 pointerup(same pointer)
   → suppress next click if moved
   → clear drag record and release pointer capture
@@ -420,9 +456,9 @@ pointercancel(same pointer)
   → clear drag record and click-suppression flag
 ```
 
-The drag ref holds the in-progress pointer gesture; `toolbarOffset` is React state because it
-drives the track's inline `translateX(...)`. Click suppression is a separate ref so a drag ending
-over a toolbar button does not accidentally invoke a click.
+The drag ref holds the in-progress pointer gesture; the toolbar's local offset state drives its
+track's inline `translateX(...)`. Click suppression is a separate ref so a drag ending over a
+toolbar button does not accidentally invoke a click.
 
 ## Style and containment layers
 
@@ -458,11 +494,13 @@ These are the current CSS breakpoints and rules, not guarantees about a fixed vi
 
 | Concern | Source |
 | --- | --- |
-| Route markup, state, panel nesting, overlay anchors, and current handlers | [`BackendPage.tsx`](../apps/web/src/pages/BackendPage.tsx) |
-| Workspace, panel, overlay, card-stack, and responsive geometry | [`styles.css`](../apps/web/src/app/styles.css) |
-| Backend route protection and route-level ownership | [`AppRoutes.tsx`](../apps/web/src/app/AppRoutes.tsx) |
+| Route composition, overlay visibility, and route callbacks | [`BackendPage.tsx`](../src/pages/BackendPage.tsx) |
+| Shared layout, dialog, card, and toolbar component contracts | [`components/`](../src/components/) |
+| Backend copy and toolbar action definitions | [`backendWorkspaceConfig.ts`](../src/pages/backendWorkspaceConfig.ts) |
+| Workspace, panel, overlay, card-stack, and responsive geometry | [`styles.css`](../src/app/styles.css) |
+| Backend route protection and route-level ownership | [`AppRoutes.tsx`](../src/app/AppRoutes.tsx) |
 | Current verified product capability and limits | [`PRODUCT_BRIEF.md`](./PRODUCT_BRIEF.md) |
 
-The focused tests in [`BackendPage.test.tsx`](../apps/web/src/pages/BackendPage.test.tsx) cover the
+The focused tests in [`BackendPage.test.tsx`](../src/pages/BackendPage.test.tsx) cover the
 route scaffold and GitHub Sync overlay ownership, content, and focus behavior. Use the current
 component and styles as the source for exact visual geometry and responsive rules.

@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "GreenDocs: Web dev server",
+      "label": "GreenDocs: dev server",
       "type": "shell",
-      "command": "corepack pnpm@12.11.2 --filter @greendocs/web dev",
+      "command": "corepack pnpm@12.11.2 dev",
       "isBackground": true,
       "problemMatcher": {
         "pattern": { "regexp": ".*", "message": 1 },
@@ -14,13 +14,6 @@
           "endsPattern": "Local:\\s+http://localhost:5173/"
         }
       }
-    },
-    {
-      "label": "GreenDocs: dev server",
-      "type": "shell",
-      "command": "corepack pnpm@12.11.2 dev",
-      "isBackground": true,
-      "problemMatcher": []
     },
     {
       "label": "GreenDocs: test",

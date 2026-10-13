@@ -18,7 +18,8 @@ application does not yet expose a documentation editor or publish UI.
 
 ## Workspace
 
-- `apps/web`: Vite/React static SPA deployed to GitHub Pages.
+- `src`: React/TypeScript application source.
+- Root `package.json` and Vite configuration: application tooling and workspace scripts.
 - `packages/contracts`: shared record, repository, and publish contracts.
 - `packages/content-schema`: record validation, content limits, hierarchy, and safe storage paths.
 
@@ -44,6 +45,6 @@ browser storage, logs, or build output.
 
 ## Deployment
 
-Pull requests and pushes to `main` run CI. Pushes to `main` also build and deploy `apps/web` to
-GitHub Pages. A commit, successful CI run, and successful deployment are separate states; verify
-each independently. See the [Operations guide](docs/OPERATIONS.md).
+Pull requests and pushes to `main` run CI. Pushes to `main` also build and deploy the root web app
+to GitHub Pages. A commit, successful CI run, and successful deployment are separate states;
+verify each independently. See the [Operations guide](docs/OPERATIONS.md).

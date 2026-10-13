@@ -23,21 +23,23 @@ holds the PAT in session storage and memory while authenticated; page JavaScript
 
 ## Runtime and data flow
 
-1. `apps/web/src/main.tsx` mounts `App`; `App` composes `AuthProvider` and the hash router.
-2. `apps/web/src/app/AppRoutes.tsx` owns route selection and lazy loading. `ProtectedRoute`
+1. `src/main.tsx` mounts `App`; `App` composes `AuthProvider` and the hash router.
+2. `src/app/AppRoutes.tsx` owns route selection and lazy loading. `ProtectedRoute`
    protects `/home` and `/backend`; route error boundaries provide local render-failure recovery.
-3. `apps/web/src/features/auth/AuthContext.tsx` verifies GitHub `/user` and the fixed repository's
+3. `src/features/auth/AuthContext.tsx` verifies GitHub `/user` and the fixed repository's
    push permission. The PAT is held in a React ref and tab-scoped `sessionStorage`; on reload the
    app revalidates it before restoring the signed-in state. Sign-out or a 401 clears it. Requests
    are restricted to the GitHub API origin and the configured repository path.
-4. `apps/web/src/pages/HomePage.tsx` asks the GitHub feature to read the repository snapshot, then
+4. `src/pages/HomePage.tsx` asks the GitHub feature to read the repository snapshot, then
    renders page hierarchy, cards, and attachments. Loading and request errors are visible.
-5. `apps/web/src/pages/BackendPage.tsx` renders the protected, independently styled `/backend`
+5. `src/pages/BackendPage.tsx` renders the protected, independently styled `/backend`
    route. Its header has Back to home, GitHub Sync, and Deployments controls around a centered
    Backend heading; the route does not read repository data or provide an authoring/publishing
-   workflow. Its two-panel visual scaffold and overlay boundaries are mapped in the
+   workflow. It composes shared header, frame, panel, dialog, toolbar, and card components, with
+   route copy and toolbar action definitions supplied separately. Its two-panel visual scaffold
+   and overlay boundaries are mapped in the
    [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
-6. `apps/web/src/features/github/client.ts` reads the fixed branch/ref, commit, recursive tree, and
+6. `src/features/github/client.ts` reads the fixed branch/ref, commit, recursive tree, and
    validated record blobs. It also retains a tested batch `publish` library operation; no
    user-facing page currently calls it.
 7. GitHub repository history is authoritative for committed content. The `/backend` route has no
@@ -47,15 +49,15 @@ holds the PAT in session storage and memory while authenticated; page JavaScript
 
 | Boundary                    | Owns                                                                                              | Important entry points                                            |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| App composition and routes  | Hash routing, public/protected routes, lazy route loading, route-level error UI                   | `apps/web/src/app/App.tsx`, `AppRoutes.tsx`, `ProtectedRoute.tsx` |
-| Authentication              | GitHub identity/permission checks, tab-scoped PAT, constrained authenticated requests             | `apps/web/src/features/auth/AuthContext.tsx`                      |
-| GitHub repository client    | Fixed-repository snapshot reads, record validation, asset validation, mutation commits            | `apps/web/src/features/github/client.ts`                          |
-| Navigation                  | Header, independent left/right drawers, auth-aware navigation                                     | `apps/web/src/features/navigation/`                               |
-| Backend route shell         | Protected route with an independent header and inert controls; no authoring UI                    | `apps/web/src/pages/BackendPage.tsx`                              |
-| Shared UI                   | Buttons, inputs, status, dialog, tabs, icon catalog                                               | `apps/web/src/components/`                                        |
+| App composition and routes  | Hash routing, public/protected routes, lazy route loading, route-level error UI                   | `src/app/App.tsx`, `AppRoutes.tsx`, `ProtectedRoute.tsx` |
+| Authentication              | GitHub identity/permission checks, tab-scoped PAT, constrained authenticated requests             | `src/features/auth/AuthContext.tsx`                      |
+| GitHub repository client    | Fixed-repository snapshot reads, record validation, asset validation, mutation commits            | `src/features/github/client.ts`                          |
+| Navigation                  | Header, independent left/right drawers, auth-aware navigation                                     | `src/features/navigation/`                               |
+| Backend route composition   | Protected independent header/workspace composition and overlay selection; no authoring UI        | `src/pages/BackendPage.tsx`                              |
+| Shared UI                   | Buttons, inputs, workspace layouts, dialogs, card previews, toolbars, status, tabs, icon catalog | `src/components/`                                        |
 | Shared contracts            | Browser-safe record and publish-request TypeScript interfaces, runtime configuration and policies | `packages/contracts/`                                             |
 | Content schema              | Zod record/relationship validation, limits, storage paths, deterministic page trees               | `packages/content-schema/src/index.ts`                            |
-| Build/runtime configuration | Fixed repo/API target, Pages base path, local port                                                | `apps/web/config.ts`, `apps/web/vite.config.ts`                   |
+| Build/runtime configuration | Fixed repo/API target, Pages base path, local port                                                | `config.ts`, `vite.config.ts`                                    |
 | Quality gates               | Module-boundary and known-secret checks; formatter, linter, typecheck, tests, build               | `scripts/`, root `package.json`, `.github/workflows/ci.yml`       |
 | Deployment                  | Static Pages artifact built from the web workspace                                                | `.github/workflows/deploy-pages.yml`                              |
 
@@ -69,7 +71,7 @@ that does not mean an API app currently exists.
 - Page, card, attachment, and publish contracts live in `packages/contracts/index.d.ts`.
 - Runtime validation, schema version, stable-ID storage paths, allowed MIME types, content limits,
   and hierarchy invariants live in `packages/content-schema/`.
-- The configured Git repository and `main` branch are centralized in `apps/web/config.ts`.
+- The configured Git repository and `main` branch are centralized in `config.ts`.
 - Repository JSON is stored at `content/pages/<uuid>.json` and `content/cards/<uuid>.json`;
   attachments refer to media under `content/media/<uuid>.<mime-derived-extension>`.
 - IDs, validated records, and explicit parent relationships define identity and hierarchy. Titles
@@ -99,11 +101,11 @@ and [Project Access](../AGENTIC/PROJECT_ACCESS.md).
 
 ## Verification map
 
-- Route, sign-in, and protected-home behavior: `apps/web/src/app/AppRoutes.test.tsx`.
+- Route, sign-in, and protected-home behavior: `src/app/AppRoutes.test.tsx`.
 - Protected backend route, independent header, and workspace scaffold:
-  `apps/web/src/pages/BackendPage.test.tsx`. For the current visual structure, see the
+  `src/pages/BackendPage.test.tsx`. For the current visual structure, see the
   [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
-- GitHub snapshot and publish behavior: `apps/web/src/features/github/client.test.ts`.
+- GitHub snapshot and publish behavior: `src/features/github/client.test.ts`.
 - Content invariants and stable ordering: `packages/content-schema/src/index.test.ts`.
-- Shared UI accessibility behaviors: `apps/web/src/components/*.test.tsx`.
+- Shared UI accessibility behaviors: `src/components/*.test.tsx`.
 - Workspace-wide commands and CI gate order: [Operations](./OPERATIONS.md).

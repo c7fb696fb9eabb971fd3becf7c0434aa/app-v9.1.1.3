@@ -14,6 +14,30 @@ These contracts describe shared presentation primitives and the authenticated do
 | `StatusIndicator` | Shared status primitive; finite status enum, optional non-sensitive detail            | Controlled by feature state                                         | Status/live region with text and icon; never color-only                              | No persistence. Test all finite states and accessible text.                                        |
 | `RoutePageShell`  | App route; route ID and page content                                                  | Route-local loading/error state                                     | Main landmark and route-specific error boundary; stable Suspense status              | No persistence. Test each route failure independently.                                             |
 
+## Backend workspace components
+
+The protected `/backend` route composes reusable components from the
+[`components` export barrel](../src/components/index.ts). Route-specific copy and toolbar
+action definitions are supplied by
+[`backendWorkspaceConfig.ts`](../src/pages/backendWorkspaceConfig.ts); the page supplies
+the existing backend CSS class names. Shared component contracts take accessible labels/content,
+slots, class maps, data, and callbacks as props rather than embedding page-specific copy or class
+selectors.
+
+| Component | Identity and inputs | State and behavior | Rendered output |
+| --- | --- | --- | --- |
+| `WorkspacePageHeader` | Page title, start/action slots, accessible name, class map | Parent-controlled inert state | Independent page header with caller-defined content. |
+| `WorkspaceFrame` / `WorkspacePanel` | Accessible names, panel/region slots, optional overlay, layout mode and class maps | Parent controls inert state and overlay selection | Workspace frame and header/content/footer panel structure. |
+| `WorkspaceActionButton` | Label, optional icon/status indicator, native button attributes | Parent-controlled callback and disabled/expanded state | Native accessible button with optional icon and status dot. |
+| `AnchoredDialog` | ID, accessible name, content, close callback, focus refs and modal flag | Escape dismissal; focus setup/restoration; Tab containment when modal | Anchored dialog surface with caller-provided content. |
+| `ActionToolbar` | Accessible name, action records, class map | Owns pointer dragging and accidental-click suppression; action callbacks are optional | Data-driven icon toolbar. |
+| `CardSummary` / `CardPreview` / `CardConnector` | Summary/preview data, icons, labels, actions, class maps | Preview owns temporary notes input; toolbar owns drag state | Summary button, decorative connector, and structured card preview. |
+| `GitHubSyncDialog` | Repository target, display copy, callbacks, class map | Owns temporary password input; does not persist credentials | Configurable repository dialog and result/footer regions. |
+
+These components provide reusable presentation contracts, not an implemented editor or sync
+workflow. The backend page currently leaves toolbar actions unwired, and its GitHub Sync test
+callback only closes the dialog.
+
 ## Route flow and documentation home
 
 - `/backend` is an undiscoverable authenticated route protected by the same existing GitHub session
@@ -56,6 +80,6 @@ These contracts describe shared presentation primitives and the authenticated do
 - Icon registry tests cover action-to-icon keys, icon accessibility, focus, click, and disabled-state API behavior.
 - Route tests cover public access, login-to-home flow, repository page/sub-page/card rendering, drawer isolation, unknown-route fallback, signed-out protected redirects, and refusal to stay on public root while authenticated.
 - Backend route tests cover its signed-in guard and workspace scaffold. Their GitHub Sync content
-  assertions need reconciliation with the current component markup; see the
-  [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
+  assertions and reusable-component behavior are covered by `BackendPage.test.tsx` and
+  `Workspace.test.tsx`; see the [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
 - Real authenticated browser acceptance has not yet been run against the direct GitHub implementation. The former deployment had no API and could not authenticate; that API dependency has been removed.

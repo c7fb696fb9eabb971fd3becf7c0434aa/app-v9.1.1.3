@@ -9,7 +9,7 @@ GreenDocs must use GitHub for identity, repository data, source control, and hos
 
 ## Decision
 
-1. `apps/web` is a React/Vite static SPA deployed to the supplied GitHub Pages URL. Hash routing supports the repository subpath.
+1. The repository-root `src/` is a React/Vite static SPA deployed to the supplied GitHub Pages URL. Hash routing supports the repository subpath.
 2. GitHub is the only runtime identity/data service. The browser sends a user-entered PAT over HTTPS directly to `api.github.com`; no application API or proxy receives it.
 3. Sign-in verifies `/user` and `permissions.push` for the fixed `c7fb696fb9eabb971fd3becf7c0434aa/app-v9.1.1.3` repository. Successful sign-in always routes to protected `/home`.
 4. **Amended 2026-10-12:** the verified PAT is held in a closure-backed memory reference and tab-scoped `sessionStorage` so refresh can restore authentication. It is not placed in localStorage, IndexedDB, Cache API, URLs, analytics, source, or build configuration. The app revalidates with GitHub after refresh; sign-out and invalid-token responses clear it. The tab-session storage remains accessible to page JavaScript.
@@ -27,8 +27,8 @@ There is no server-side secret boundary in this architecture. While signed in, a
 
 | Module                         | Responsibility                                                           |
 | ------------------------------ | ------------------------------------------------------------------------ |
-| `apps/web/src/features/auth`   | Verify GitHub identity/repository permission and hold the tab-scoped PAT |
-| `apps/web/src/features/github` | Fixed-repository GitHub API reads and atomic Git commits                 |
+| `src/features/auth`            | Verify GitHub identity/repository permission and hold the tab-scoped PAT |
+| `src/features/github`          | Fixed-repository GitHub API reads and atomic Git commits                 |
 | `packages/contracts`           | Shared record and publish types                                          |
 | `packages/content-schema`      | Record validation and safe storage-path construction                     |
 | `.github/workflows`            | CI and Pages deployment only                                             |
