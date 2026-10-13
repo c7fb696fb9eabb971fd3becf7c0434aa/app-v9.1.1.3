@@ -17,6 +17,8 @@ to the task after completing the short agent warm-up in [`AGENTIC/README.md`](..
 
 - [UI component contracts](./UI_COMPONENT_CONTRACTS.md) — component ownership, routes,
   accessibility, and UI behavior.
+- [Backend workspace visual map](./BACKEND_WORKSPACE_MAP.md) — as-built hierarchy, panel
+  construction, overlay boundaries, and responsive layout of `/#/backend`.
 - [Color system](./COLOR_SYSTEM.md) — design tokens and visual interaction requirements.
 - [Cache policy](./CACHE_POLICY.md) — cache and freshness expectations by data class.
 - [Content schema README](../packages/content-schema/README.md) — content records, validation,

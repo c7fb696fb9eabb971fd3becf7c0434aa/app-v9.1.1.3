@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Primitives';
 import { Icon, type IconName } from '../components/Icon';
-import { APP_ROUTES } from '../../config';
+import { APP_ROUTES, GITHUB_REPOSITORY } from '../../config';
 
 const cardToolbarActions: { icon: IconName; label: string }[] = [
   { icon: 'cardPreview', label: 'Preview card' },
@@ -24,10 +24,12 @@ const cardToolbarActions: { icon: IconName; label: string }[] = [
 
 export function BackendPage() {
   const navigate = useNavigate();
-  const [isExplorerOpen, setIsExplorerOpen] = useState(false);
+  const [openPanel, setOpenPanel] = useState<'explorer' | 'github-sync' | null>(null);
   const [toolbarOffset, setToolbarOffset] = useState(0);
   const selectButtonRef = useRef<HTMLButtonElement>(null);
   const closeExplorerButtonRef = useRef<HTMLButtonElement>(null);
+  const githubSyncButtonRef = useRef<HTMLButtonElement>(null);
+  const closeGithubSyncButtonRef = useRef<HTMLButtonElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const toolbarTrackRef = useRef<HTMLDivElement>(null);
   const toolbarDragRef = useRef<{
@@ -90,19 +92,29 @@ export function BackendPage() {
   };
 
   useEffect(() => {
-    if (!isExplorerOpen) return;
+    if (!openPanel) return;
 
     const previousFocus = document.activeElement;
-    closeExplorerButtonRef.current?.focus();
+    const closeButton =
+      openPanel === 'explorer' ? closeExplorerButtonRef : closeGithubSyncButtonRef;
+    const trigger = openPanel === 'explorer' ? selectButtonRef : githubSyncButtonRef;
+    closeButton.current?.focus();
     return () => {
-      if (previousFocus instanceof HTMLElement) previousFocus.focus();
-      else selectButtonRef.current?.focus();
+      if (previousFocus instanceof HTMLElement && previousFocus !== document.body) {
+        previousFocus.focus();
+      } else {
+        trigger.current?.focus();
+      }
     };
-  }, [isExplorerOpen]);
+  }, [openPanel]);
 
   return (
     <div className="backend-shell">
-      <header className="backend-header" aria-label="Backend header" inert={isExplorerOpen}>
+      <header
+        className="backend-header"
+        aria-label="Backend header"
+        inert={openPanel === 'explorer'}
+      >
         <div className="backend-header-inner">
           <div className="backend-header-start">
             <Button
@@ -124,14 +136,25 @@ export function BackendPage() {
       </header>
       <main className="backend-main">
         <section className="backend-workspace-container" aria-label="Backend workspace">
-          <div className="backend-workspace-panels" inert={isExplorerOpen}>
+          <div className="backend-workspace-panels" inert={openPanel === 'explorer'}>
             <section className="backend-workspace-panel" aria-label="Workspace panel 1">
-              <div className="backend-workspace-panel-layout">
+              <div
+                className="backend-workspace-panel-layout"
+                inert={openPanel === 'github-sync'}
+              >
                 <header
                   className="backend-workspace-panel-header backend-workspace-panel-header--spread"
                   aria-label="Workspace panel 1 header"
                 >
-                  <Button type="button" className="backend-header-button">
+                  <Button
+                    ref={githubSyncButtonRef}
+                    type="button"
+                    className="backend-header-button"
+                    aria-haspopup="dialog"
+                    aria-expanded={openPanel === 'github-sync'}
+                    aria-controls="backend-github-sync-panel"
+                    onClick={() => setOpenPanel('github-sync')}
+                  >
                     <span className="backend-live-preview-dot" aria-hidden="true" />
                     Github Sync
                   </Button>
@@ -141,11 +164,11 @@ export function BackendPage() {
                   <Button
                     ref={selectButtonRef}
                     type="button"
-                    className="backend-header-button"
+                    className="backend-header-button backend-select-button"
                     aria-haspopup="dialog"
-                    aria-expanded={isExplorerOpen}
+                    aria-expanded={openPanel === 'explorer'}
                     aria-controls="backend-page-explorer"
-                    onClick={() => setIsExplorerOpen(true)}
+                    onClick={() => setOpenPanel('explorer')}
                   >
                     <Icon name="selectTool" size={14} />
                     Select
@@ -160,6 +183,89 @@ export function BackendPage() {
                   aria-label="Workspace panel 1 footer"
                 />
               </div>
+              {openPanel === 'github-sync' && (
+                <section
+                  id="backend-github-sync-panel"
+                  className="backend-github-sync-panel"
+                  role="dialog"
+                  aria-labelledby="backend-github-sync-title"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setOpenPanel(null);
+                  }}
+                >
+                  <header className="backend-github-sync-header">
+                    <h2 id="backend-github-sync-title">
+                      GitHub Repository Sync Settings
+                    </h2>
+                    <Button
+                      ref={closeGithubSyncButtonRef}
+                      type="button"
+                      className="backend-github-sync-close"
+                      aria-label="Close GitHub sync"
+                      onClick={() => setOpenPanel(null)}
+                    >
+                      <Icon name="navigationClose" size={16} />
+                    </Button>
+                  </header>
+                  <div className="backend-github-sync-content">
+                    <label className="backend-github-sync-field" htmlFor="github-sync-owner">
+                      GitHub Owner / Organization
+                      <input
+                        id="github-sync-owner"
+                        name="github-owner"
+                        type="text"
+                        value={GITHUB_REPOSITORY.owner}
+                        readOnly
+                      />
+                    </label>
+                    <label className="backend-github-sync-field" htmlFor="github-sync-repository">
+                      Repository Name
+                      <input
+                        id="github-sync-repository"
+                        name="github-repository"
+                        type="text"
+                        value={GITHUB_REPOSITORY.name}
+                        readOnly
+                      />
+                    </label>
+                    <label className="backend-github-sync-field" htmlFor="github-sync-branch">
+                      Branch
+                      <input
+                        id="github-sync-branch"
+                        name="github-branch"
+                        type="text"
+                        value={GITHUB_REPOSITORY.branch}
+                        readOnly
+                      />
+                    </label>
+                    <label className="backend-github-sync-field" htmlFor="github-sync-token">
+                      GitHub Personal Access Token (PAT)
+                      <input
+                        id="github-sync-token"
+                        name="github-token"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="Enter a personal access token"
+                      />
+                    </label>
+                    <section
+                      className="backend-github-sync-results"
+                      aria-labelledby="backend-github-sync-results-title"
+                    >
+                      <h3 id="backend-github-sync-results-title">Connection Test Results</h3>
+                      <p>Connection status and branch details will appear here after a test.</p>
+                    </section>
+                  </div>
+                  <footer className="backend-github-sync-footer">
+                    <Button type="button" onClick={() => setOpenPanel(null)}>
+                      Connection Test
+                    </Button>
+                    <Button type="button" disabled>
+                      Save &amp; Connect
+                    </Button>
+                  </footer>
+                </section>
+              )}
             </section>
             <section className="backend-workspace-panel" aria-label="Workspace panel 2">
               <div className="backend-workspace-panel-layout">
@@ -260,7 +366,7 @@ export function BackendPage() {
               </div>
             </section>
           </div>
-          {isExplorerOpen && (
+          {openPanel === 'explorer' && (
             <section
               id="backend-page-explorer"
               className="backend-page-explorer"
@@ -268,7 +374,7 @@ export function BackendPage() {
               aria-modal="true"
               aria-label="Page, sub page or card explorer"
               onKeyDown={(event) => {
-                if (event.key === 'Escape') setIsExplorerOpen(false);
+                if (event.key === 'Escape') setOpenPanel(null);
                 if (event.key === 'Tab') {
                   event.preventDefault();
                   closeExplorerButtonRef.current?.focus();
@@ -280,7 +386,7 @@ export function BackendPage() {
                 type="button"
                 className="backend-page-explorer-close"
                 aria-label="Close explorer"
-                onClick={() => setIsExplorerOpen(false)}
+                onClick={() => setOpenPanel(null)}
               >
                 <Icon name="navigationClose" size={16} />
               </Button>

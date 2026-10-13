@@ -39,7 +39,7 @@ source-control history, and static hosting. The application has no server-side A
 - The application has no server-side API or external database. Introducing either is a
   product/architecture change, not an assumption agents may make.
 
-## Current implementation (verified 2026-10-12)
+## Current implementation (verified 2026-10-13)
 
 ### Available in the application
 
@@ -49,9 +49,10 @@ source-control history, and static hosting. The application has no server-side A
   after refresh; sign-out and invalid credentials clear it.
 - The protected `/home` route reads the repository's Git ref, commit, tree, and relevant blobs;
   validates records; and renders pages, nested pages, cards, and supported attachments.
-- The protected, undiscoverable `/#/backend` route renders an independent header visually matching
-  the Home header surface. It contains inert Back to home, GitHub sync, and Deployments buttons
-  around a centered Backend heading; it does not show other page content or shared Home components.
+- The protected, undiscoverable `/#/backend` route renders an independent header and a two-panel
+  workspace scaffold. It includes a nested visual card-editor preview and GitHub Sync / Select
+  overlays, but no user-facing authoring or publishing workflow. See the
+  [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md) for its as-built composition.
 - There is no user-facing authoring or publish workflow. The repository client has a tested publish
   primitive, but no page calls it.
 - GitHub API requests use `no-store`; repository and schema boundaries have tests.

@@ -33,8 +33,10 @@ holds the PAT in session storage and memory while authenticated; page JavaScript
 4. `apps/web/src/pages/HomePage.tsx` asks the GitHub feature to read the repository snapshot, then
    renders page hierarchy, cards, and attachments. Loading and request errors are visible.
 5. `apps/web/src/pages/BackendPage.tsx` renders the protected, independently styled `/backend`
-   route. Its header has inert Back to home, GitHub sync, and Deployments buttons around a centered
-   Backend heading; it does not read repository data or provide authoring/publishing UI.
+   route. Its header has Back to home, GitHub Sync, and Deployments controls around a centered
+   Backend heading; the route does not read repository data or provide an authoring/publishing
+   workflow. Its two-panel visual scaffold and overlay boundaries are mapped in the
+   [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
 6. `apps/web/src/features/github/client.ts` reads the fixed branch/ref, commit, recursive tree, and
    validated record blobs. It also retains a tested batch `publish` library operation; no
    user-facing page currently calls it.
@@ -98,8 +100,9 @@ and [Project Access](../AGENTIC/PROJECT_ACCESS.md).
 ## Verification map
 
 - Route, sign-in, and protected-home behavior: `apps/web/src/app/AppRoutes.test.tsx`.
-- Protected backend route, independent header, and empty workspace panels:
-  `apps/web/src/pages/BackendPage.test.tsx`.
+- Protected backend route, independent header, and workspace scaffold:
+  `apps/web/src/pages/BackendPage.test.tsx`. For the current visual structure, see the
+  [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
 - GitHub snapshot and publish behavior: `apps/web/src/features/github/client.test.ts`.
 - Content invariants and stable ordering: `packages/content-schema/src/index.test.ts`.
 - Shared UI accessibility behaviors: `apps/web/src/components/*.test.tsx`.
