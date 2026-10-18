@@ -18,10 +18,13 @@ export type GitHubSyncCopy = {
   branchLabel: string;
   tokenLabel: string;
   tokenPlaceholder: string;
+  connectedTokenPlaceholder: string;
   resultsTitle: string;
   resultsMessage: string;
+  connectedMessage: string;
   testSuccessMessage: string;
   testFailureMessage: string;
+  saveSuccessMessage: string;
   saveFailureMessage: string;
   testLabel: string;
   saveLabel: string;
@@ -51,6 +54,7 @@ export function GitHubSyncDialog({
   id,
   repository,
   copy,
+  connected = false,
   onClose,
   onTest,
   onSave,
@@ -61,8 +65,9 @@ export function GitHubSyncDialog({
   id: string;
   repository: GitHubRepositoryTarget;
   copy: GitHubSyncCopy;
+  connected?: boolean;
   onClose: () => void;
-  onTest: (token: string) => void;
+  onTest: (token: string) => string | void | Promise<string | void>;
   onSave?: (token: string) => void;
   saveDisabled?: boolean;
   returnFocusRef?: RefObject<HTMLElement | null>;
@@ -81,7 +86,9 @@ export function GitHubSyncDialog({
   }>;
 }) {
   const [token, setToken] = useState('');
-  const [resultMessage, setResultMessage] = useState(copy.resultsMessage);
+  const [resultMessage, setResultMessage] = useState(
+    connected ? copy.connectedMessage : copy.resultsMessage,
+  );
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -92,12 +99,12 @@ export function GitHubSyncDialog({
 
   async function testConnection() {
     const candidate = token.trim();
-    if (!candidate || isTesting || isSaving) return;
+    if ((!candidate && !connected) || isTesting || isSaving) return;
     setIsTesting(true);
     setResultMessage(copy.resultsMessage);
     try {
-      await onTest(candidate);
-      setResultMessage(copy.testSuccessMessage);
+      const result = await onTest(candidate);
+      setResultMessage(typeof result === 'string' ? result : copy.testSuccessMessage);
     } catch (cause) {
       setResultMessage(connectionErrorMessage(cause, copy.testFailureMessage));
     } finally {
@@ -111,8 +118,10 @@ export function GitHubSyncDialog({
     setIsSaving(true);
     try {
       await onSave(candidate);
+      setResultMessage(copy.saveSuccessMessage);
     } catch (cause) {
       setResultMessage(connectionErrorMessage(cause, copy.saveFailureMessage));
+    } finally {
       setIsSaving(false);
     }
   }
@@ -174,7 +183,9 @@ export function GitHubSyncDialog({
             id={`${id}-token`}
             type="password"
             autoComplete="new-password"
-            placeholder={copy.tokenPlaceholder}
+            placeholder={
+              connected && !token ? copy.connectedTokenPlaceholder : copy.tokenPlaceholder
+            }
             value={token}
             onChange={handleTokenChange}
           />
@@ -192,7 +203,7 @@ export function GitHubSyncDialog({
         <Button
           type="button"
           onClick={() => void testConnection()}
-          disabled={isTesting || isSaving}
+          disabled={isTesting || isSaving || (!connected && !token.trim())}
         >
           {isTesting ? 'Testing…' : copy.testLabel}
         </Button>

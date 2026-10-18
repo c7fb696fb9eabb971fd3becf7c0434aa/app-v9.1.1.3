@@ -98,8 +98,8 @@ describe('reusable workspace components', () => {
   });
 
   it('allows saving a non-empty token without requiring a separate connection test', async () => {
-    const onTest = vi.fn();
-    const onSave = vi.fn();
+    const onTest = vi.fn().mockResolvedValue('Live repository checked.');
+    const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <GitHubSyncDialog
         id="sync-test"
@@ -113,10 +113,13 @@ describe('reusable workspace components', () => {
           branchLabel: 'Target branch',
           tokenLabel: 'Access key',
           tokenPlaceholder: 'Key value',
+          connectedTokenPlaceholder: 'Connected; key hidden',
           resultsTitle: 'Status',
           resultsMessage: 'No attempt yet',
+          connectedMessage: 'Already connected.',
           testSuccessMessage: 'Connection passed.',
           testFailureMessage: 'Connection failed.',
+          saveSuccessMessage: 'Connection initialized.',
           saveFailureMessage: 'Save failed.',
           testLabel: 'Check access',
           saveLabel: 'Save settings',
@@ -134,8 +137,12 @@ describe('reusable workspace components', () => {
     fireEvent.change(screen.getByLabelText('Access key'), { target: { value: 'temporary' } });
     expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText('Connection initialized.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check access' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Check access' }));
+    expect(await screen.findByText('Live repository checked.')).toBeInTheDocument();
     expect(onSave).toHaveBeenCalledWith('temporary');
-    expect(onTest).not.toHaveBeenCalled();
+    expect(onTest).toHaveBeenCalledWith('temporary');
   });
 
   it('allows saving after a failed connection test and shows save failures', async () => {
@@ -154,10 +161,13 @@ describe('reusable workspace components', () => {
           branchLabel: 'Target branch',
           tokenLabel: 'Access key',
           tokenPlaceholder: 'Key value',
+          connectedTokenPlaceholder: 'Connected; key hidden',
           resultsTitle: 'Status',
           resultsMessage: 'No attempt yet',
+          connectedMessage: 'Already connected.',
           testSuccessMessage: 'Connection passed.',
           testFailureMessage: 'Connection failed.',
+          saveSuccessMessage: 'Connection initialized.',
           saveFailureMessage: 'Save failed.',
           testLabel: 'Check access',
           saveLabel: 'Save settings',

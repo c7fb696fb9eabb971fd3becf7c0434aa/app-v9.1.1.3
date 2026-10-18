@@ -3,8 +3,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackendPage } from './BackendPage';
 
-const { githubRequest, loginWithPat, verifyGitHubPat, readSnapshot, publishV2Snapshot } =
+const { authState, githubRequest, loginWithPat, verifyGitHubPat, readSnapshot, publishV2Snapshot } =
   vi.hoisted(() => ({
+    authState: {
+      user: null as null | { id: string; login: string; name: null; avatarUrl: string },
+    },
     githubRequest: vi.fn(),
     loginWithPat: vi.fn(),
     verifyGitHubPat: vi.fn(),
@@ -13,7 +16,7 @@ const { githubRequest, loginWithPat, verifyGitHubPat, readSnapshot, publishV2Sna
   }));
 
 vi.mock('../features/auth', () => ({
-  useAuth: () => ({ githubRequest, loginWithPat, verifyGitHubPat }),
+  useAuth: () => ({ githubRequest, loginWithPat, verifyGitHubPat, user: authState.user }),
 }));
 
 vi.mock('../features/github', () => ({
@@ -85,7 +88,15 @@ const repositorySnapshot = {
 };
 
 beforeEach(() => {
-  loginWithPat.mockReset().mockResolvedValue(undefined);
+  authState.user = null;
+  loginWithPat.mockReset().mockImplementation(async () => {
+    authState.user = {
+      id: '123',
+      login: 'verified-user',
+      name: null,
+      avatarUrl: 'https://avatars.example.test/123',
+    };
+  });
   verifyGitHubPat.mockReset().mockResolvedValue(undefined);
   readSnapshot.mockReset().mockResolvedValue(repositorySnapshot);
   publishV2Snapshot.mockReset();
@@ -428,7 +439,7 @@ describe('BackendPage', () => {
     expect(readSnapshot).toHaveBeenCalledTimes(2);
   });
 
-  it('saves a PAT directly and starts an authenticated repository session', async () => {
+  it('keeps settings open after connect and tests the live repository in place', async () => {
     render(
       <MemoryRouter>
         <BackendPage />
@@ -449,11 +460,31 @@ describe('BackendPage', () => {
     fireEvent.click(saveButton);
     expect(loginWithPat).toHaveBeenCalledWith('temporary-test-token');
     expect(verifyGitHubPat).not.toHaveBeenCalled();
-    await screen.findByRole('form', { name: 'Selected record editor' });
     expect(
-      screen.queryByRole('dialog', { name: 'GitHub Repository Sync Settings' }),
-    ).not.toBeInTheDocument();
+      await screen.findByText(
+        'Connection initialized. Use Connection Test to verify the live repository.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'GitHub Repository Sync Settings' }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(readSnapshot).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Connection Test' }));
+    expect(
+      await screen.findByText('Connection test passed. Read 3 pages and 3 cards from main.'),
+    ).toBeInTheDocument();
+    expect(readSnapshot).toHaveBeenCalledTimes(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Close GitHub sync' }));
+    fireEvent.click(syncButton);
+    expect(screen.getByLabelText('GitHub Personal Access Token (PAT)')).toHaveAttribute(
+      'placeholder',
+      'Connected for this browser session; token is hidden',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Connection Test' }));
+    expect(
+      await screen.findByText('Connection test passed. Read 3 pages and 3 cards from main.'),
+    ).toBeInTheDocument();
+    expect(readSnapshot).toHaveBeenCalledTimes(4);
   });
 
   it('keeps the GitHub sync dialog scoped to the first panel and restores focus on close', () => {
@@ -482,7 +513,7 @@ describe('BackendPage', () => {
       'password',
     );
     expect(screen.getByRole('region', { name: 'Connection Test Results' })).toHaveTextContent(
-      'Save & Connect verifies access and starts your session. Connection Test checks access without saving.',
+      'Enter a GitHub token, then select Save & Connect to initialize the connection.',
     );
     expect(firstPanel.querySelector('.backend-workspace-panel-layout')).toHaveAttribute('inert');
     expect(secondPanel).not.toHaveAttribute('inert');

@@ -37,7 +37,7 @@ type RecordDraft = {
 
 export function BackendPage() {
   const navigate = useNavigate();
-  const { githubRequest, loginWithPat, verifyGitHubPat } = useAuth();
+  const { githubRequest, loginWithPat, user, verifyGitHubPat } = useAuth();
   const repositoryClient = useMemo(
     () => createGitHubRepositoryClient(githubRequest),
     [githubRequest],
@@ -208,6 +208,15 @@ export function BackendPage() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function testGitHubConnection(token: string): Promise<string> {
+    if (!user) {
+      await verifyGitHubPat(token);
+      return gitHubSyncCopy.testSuccessMessage;
+    }
+    const snapshot = await repositoryClient.readSnapshot();
+    return `Connection test passed. Read ${snapshot.pages.length} pages and ${snapshot.cards.length} cards from ${GITHUB_REPOSITORY.branch}.`;
   }
 
   return (
@@ -419,11 +428,11 @@ export function BackendPage() {
                   id={copy.panelIds.sync}
                   repository={GITHUB_REPOSITORY}
                   copy={gitHubSyncCopy}
+                  connected={user !== null}
                   onClose={() => setOpenPanel(null)}
-                  onTest={verifyGitHubPat}
+                  onTest={testGitHubConnection}
                   onSave={async (token) => {
                     await loginWithPat(token);
-                    setOpenPanel(null);
                     setReload((value) => value + 1);
                   }}
                   returnFocusRef={githubSyncButtonRef}

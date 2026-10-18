@@ -56,11 +56,14 @@ export const gitHubSyncCopy: GitHubSyncCopy = {
   branchLabel: 'Branch',
   tokenLabel: 'GitHub Personal Access Token (PAT)',
   tokenPlaceholder: 'Enter a personal access token',
+  connectedTokenPlaceholder: 'Connected for this browser session; token is hidden',
   resultsTitle: 'Connection Test Results',
-  resultsMessage:
-    'Save & Connect verifies access and starts your session. Connection Test checks access without saving.',
-  testSuccessMessage: 'Connection verified. Save & Connect to start the GitHub session.',
+  resultsMessage: 'Enter a GitHub token, then select Save & Connect to initialize the connection.',
+  connectedMessage:
+    'GitHub is connected for this browser session. Connection Test checks the live repository.',
+  testSuccessMessage: 'GitHub token verified. Save & Connect to initialize the session.',
   testFailureMessage: 'The connection test failed.',
+  saveSuccessMessage: 'Connection initialized. Use Connection Test to verify the live repository.',
   saveFailureMessage: 'Could not connect to GitHub.',
   testLabel: 'Connection Test',
   saveLabel: 'Save & Connect',
