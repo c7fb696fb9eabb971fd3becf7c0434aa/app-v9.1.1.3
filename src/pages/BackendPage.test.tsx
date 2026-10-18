@@ -1,16 +1,19 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackendPage } from './BackendPage';
 
-const { githubRequest, readSnapshot, publishV2Snapshot } = vi.hoisted(() => ({
-  githubRequest: vi.fn(),
-  readSnapshot: vi.fn(),
-  publishV2Snapshot: vi.fn(),
-}));
+const { githubRequest, loginWithPat, verifyGitHubPat, readSnapshot, publishV2Snapshot } =
+  vi.hoisted(() => ({
+    githubRequest: vi.fn(),
+    loginWithPat: vi.fn(),
+    verifyGitHubPat: vi.fn(),
+    readSnapshot: vi.fn(),
+    publishV2Snapshot: vi.fn(),
+  }));
 
 vi.mock('../features/auth', () => ({
-  useAuth: () => ({ githubRequest }),
+  useAuth: () => ({ githubRequest, loginWithPat, verifyGitHubPat }),
 }));
 
 vi.mock('../features/github', () => ({
@@ -82,6 +85,8 @@ const repositorySnapshot = {
 };
 
 beforeEach(() => {
+  loginWithPat.mockReset().mockResolvedValue(undefined);
+  verifyGitHubPat.mockReset().mockResolvedValue(undefined);
   readSnapshot.mockReset().mockResolvedValue(repositorySnapshot);
   publishV2Snapshot.mockReset();
 });
@@ -237,7 +242,7 @@ describe('BackendPage', () => {
       'a'.repeat(40),
     );
     await screen.findByRole('form', { name: 'Selected record editor' });
-    expect(readSnapshot).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(readSnapshot).toHaveBeenCalledTimes(2));
   });
 
   it('preserves the v2 draft and reports an outdated-repository conflict', async () => {
@@ -423,7 +428,40 @@ describe('BackendPage', () => {
     expect(readSnapshot).toHaveBeenCalledTimes(2);
   });
 
-  it('opens the GitHub sync panel over only the first workspace panel', () => {
+  it('tests a PAT, enables Save & Connect, and starts an authenticated repository session', async () => {
+    render(
+      <MemoryRouter>
+        <BackendPage />
+      </MemoryRouter>,
+    );
+    const syncButton = screen.getByRole('button', { name: 'Github Sync' });
+
+    fireEvent.click(syncButton);
+
+    expect(
+      screen.getByRole('dialog', { name: 'GitHub Repository Sync Settings' }),
+    ).toBeInTheDocument();
+    const tokenInput = screen.getByLabelText('GitHub Personal Access Token (PAT)');
+    const testButton = screen.getByRole('button', { name: 'Connection Test' });
+    const saveButton = screen.getByRole('button', { name: 'Save & Connect' });
+    expect(saveButton).toBeDisabled();
+    fireEvent.change(tokenInput, { target: { value: 'temporary-test-token' } });
+    fireEvent.click(testButton);
+    expect(verifyGitHubPat).toHaveBeenCalledWith('temporary-test-token');
+    expect(
+      await screen.findByText('Connection verified. Save & Connect to start the GitHub session.'),
+    ).toBeInTheDocument();
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
+    expect(loginWithPat).toHaveBeenCalledWith('temporary-test-token');
+    await screen.findByRole('form', { name: 'Selected record editor' });
+    expect(
+      screen.queryByRole('dialog', { name: 'GitHub Repository Sync Settings' }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(readSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the GitHub sync dialog scoped to the first panel and restores focus on close', () => {
     const { container } = render(
       <MemoryRouter>
         <BackendPage />
@@ -451,11 +489,6 @@ describe('BackendPage', () => {
     expect(screen.getByRole('region', { name: 'Connection Test Results' })).toHaveTextContent(
       'Connection status and branch details will appear here after a test.',
     );
-    expect(
-      Array.from(syncPanel.querySelectorAll('.backend-github-sync-footer button')).map(
-        (button) => button.textContent,
-      ),
-    ).toEqual(['Connection Test', 'Save & Connect']);
     expect(firstPanel.querySelector('.backend-workspace-panel-layout')).toHaveAttribute('inert');
     expect(secondPanel).not.toHaveAttribute('inert');
     expect(container.querySelector('.backend-workspace-container')).not.toHaveAttribute('inert');

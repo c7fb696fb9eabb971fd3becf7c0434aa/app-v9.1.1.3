@@ -37,7 +37,7 @@ type RecordDraft = {
 
 export function BackendPage() {
   const navigate = useNavigate();
-  const { githubRequest } = useAuth();
+  const { githubRequest, loginWithPat, verifyGitHubPat } = useAuth();
   const repositoryClient = useMemo(
     () => createGitHubRepositoryClient(githubRequest),
     [githubRequest],
@@ -420,8 +420,12 @@ export function BackendPage() {
                   repository={GITHUB_REPOSITORY}
                   copy={gitHubSyncCopy}
                   onClose={() => setOpenPanel(null)}
-                  onTest={() => setOpenPanel(null)}
-                  saveDisabled
+                  onTest={verifyGitHubPat}
+                  onSave={async (token) => {
+                    await loginWithPat(token);
+                    setOpenPanel(null);
+                    setReload((value) => value + 1);
+                  }}
                   returnFocusRef={githubSyncButtonRef}
                   classNames={{
                     root: 'backend-github-sync-panel',

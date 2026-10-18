@@ -58,6 +58,9 @@ export const gitHubSyncCopy: GitHubSyncCopy = {
   tokenPlaceholder: 'Enter a personal access token',
   resultsTitle: 'Connection Test Results',
   resultsMessage: 'Connection status and branch details will appear here after a test.',
+  testSuccessMessage: 'Connection verified. Save & Connect to start the GitHub session.',
+  testFailureMessage: 'The connection test failed.',
+  saveFailureMessage: 'Could not connect to GitHub.',
   testLabel: 'Connection Test',
   saveLabel: 'Save & Connect',
 };

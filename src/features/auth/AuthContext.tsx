@@ -33,6 +33,7 @@ interface AuthState {
   user: VerifiedGithubUser | null;
   isCheckingSession: boolean;
   sessionRestoreError: boolean;
+  verifyGitHubPat: (pat: string) => Promise<void>;
   loginWithPat: (pat: string) => Promise<void>;
   logout: () => void;
   githubRequest: (path: string, init?: RequestInit) => Promise<Response>;
@@ -223,6 +224,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [clearAuth],
   );
 
+  const verifyGitHubPat = useCallback(async (pat: string) => {
+    const candidate = pat.trim();
+    if (!candidate) throw new Error('github_token_invalid');
+    await verifyPat(candidate);
+  }, []);
+
   const loginWithPat = useCallback(
     async (pat: string) => {
       const candidate = pat.trim();
@@ -255,11 +262,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isCheckingSession,
       sessionRestoreError,
+      verifyGitHubPat,
       loginWithPat,
       logout,
       githubRequest,
     }),
-    [githubRequest, isCheckingSession, loginWithPat, logout, sessionRestoreError, user],
+    [
+      githubRequest,
+      isCheckingSession,
+      loginWithPat,
+      logout,
+      sessionRestoreError,
+      user,
+      verifyGitHubPat,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
