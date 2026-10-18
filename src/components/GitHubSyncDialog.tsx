@@ -22,8 +22,10 @@ export type GitHubSyncCopy = {
   resultsTitle: string;
   resultsMessage: string;
   connectedMessage: string;
+  testProgressMessage: string;
   testSuccessMessage: string;
   testFailureMessage: string;
+  saveProgressMessage: string;
   saveSuccessMessage: string;
   saveFailureMessage: string;
   testLabel: string;
@@ -101,7 +103,7 @@ export function GitHubSyncDialog({
     const candidate = token.trim();
     if ((!candidate && !connected) || isTesting || isSaving) return;
     setIsTesting(true);
-    setResultMessage(copy.resultsMessage);
+    setResultMessage(copy.testProgressMessage);
     try {
       const result = await onTest(candidate);
       setResultMessage(typeof result === 'string' ? result : copy.testSuccessMessage);
@@ -116,6 +118,7 @@ export function GitHubSyncDialog({
     const candidate = token.trim();
     if (!candidate || isTesting || isSaving || !onSave) return;
     setIsSaving(true);
+    setResultMessage(copy.saveProgressMessage);
     try {
       await onSave(candidate);
       setResultMessage(copy.saveSuccessMessage);

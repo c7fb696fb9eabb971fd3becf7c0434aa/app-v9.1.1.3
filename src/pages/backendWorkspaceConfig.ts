@@ -61,8 +61,10 @@ export const gitHubSyncCopy: GitHubSyncCopy = {
   resultsMessage: 'Enter a GitHub token, then select Save & Connect to initialize the connection.',
   connectedMessage:
     'GitHub is connected for this browser session. Connection Test checks the live repository.',
+  testProgressMessage: 'Checking the live GitHub repository…',
   testSuccessMessage: 'GitHub token verified. Save & Connect to initialize the session.',
   testFailureMessage: 'The connection test failed.',
+  saveProgressMessage: 'Initializing the GitHub connection and verifying repository permissions…',
   saveSuccessMessage: 'Connection initialized. Use Connection Test to verify the live repository.',
   saveFailureMessage: 'Could not connect to GitHub.',
   testLabel: 'Connection Test',

@@ -99,7 +99,13 @@ describe('reusable workspace components', () => {
 
   it('allows saving a non-empty token without requiring a separate connection test', async () => {
     const onTest = vi.fn().mockResolvedValue('Live repository checked.');
-    const onSave = vi.fn().mockResolvedValue(undefined);
+    let finishSave: (() => void) | undefined;
+    const onSave = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
     render(
       <GitHubSyncDialog
         id="sync-test"
@@ -117,8 +123,10 @@ describe('reusable workspace components', () => {
           resultsTitle: 'Status',
           resultsMessage: 'No attempt yet',
           connectedMessage: 'Already connected.',
+          testProgressMessage: 'Checking repository.',
           testSuccessMessage: 'Connection passed.',
           testFailureMessage: 'Connection failed.',
+          saveProgressMessage: 'Connecting.',
           saveSuccessMessage: 'Connection initialized.',
           saveFailureMessage: 'Save failed.',
           testLabel: 'Check access',
@@ -137,6 +145,8 @@ describe('reusable workspace components', () => {
     fireEvent.change(screen.getByLabelText('Access key'), { target: { value: 'temporary' } });
     expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText('Connecting.')).toBeInTheDocument();
+    finishSave?.();
     expect(await screen.findByText('Connection initialized.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Check access' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Check access' }));
@@ -165,8 +175,10 @@ describe('reusable workspace components', () => {
           resultsTitle: 'Status',
           resultsMessage: 'No attempt yet',
           connectedMessage: 'Already connected.',
+          testProgressMessage: 'Checking repository.',
           testSuccessMessage: 'Connection passed.',
           testFailureMessage: 'Connection failed.',
+          saveProgressMessage: 'Connecting.',
           saveSuccessMessage: 'Connection initialized.',
           saveFailureMessage: 'Save failed.',
           testLabel: 'Check access',
