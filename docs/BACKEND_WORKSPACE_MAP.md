@@ -97,7 +97,7 @@ flowchart TB
             subgraph EXPLORER["Conditional DOM child: Select explorer · z-index 2"]
                 direction TB
                 EXPLORER_CLOSE["Close button"]
-                EXPLORER_BODY["Currently empty explorer surface"]
+                EXPLORER_BODY["Mock page/nested-page/container/card tree · row actions"]
             end
         end
         MAIN --> FRAME
@@ -117,14 +117,14 @@ anchor; neither is a new workspace panel.
 
 ### Legend: component tree versus layout
 
-| Diagram concept | Meaning in this map |
-| --- | --- |
-| Indented child / solid arrow | DOM containment: the child is rendered inside its parent. |
-| Thick arrow | Interaction flow: an event changes local state or closes an overlay. |
-| Dashed arrow | CSS containing-block relationship for absolute positioning; it is not DOM nesting. |
-| `grid` / `flex` tracks | Space allocation inside a parent; tracks do not create DOM elements. |
-| `::before` / `::after` | CSS-painted decoration, not a React component or interactive panel. |
-| Overlay | Conditionally rendered DOM child at its declared parent, painted above its positioning anchor. |
+| Diagram concept              | Meaning in this map                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| Indented child / solid arrow | DOM containment: the child is rendered inside its parent.                                      |
+| Thick arrow                  | Interaction flow: an event changes local state or closes an overlay.                           |
+| Dashed arrow                 | CSS containing-block relationship for absolute positioning; it is not DOM nesting.             |
+| `grid` / `flex` tracks       | Space allocation inside a parent; tracks do not create DOM elements.                           |
+| `::before` / `::after`       | CSS-painted decoration, not a React component or interactive panel.                            |
+| Overlay                      | Conditionally rendered DOM child at its declared parent, painted above its positioning anchor. |
 
 The route boundary is also layered: `AppRoutes` selects `/#/backend`, wraps `BackendPage` in
 `ProtectedRoute` and a route error boundary, then lazy-loads the page. `BackendPage` itself renders
@@ -167,19 +167,22 @@ toolbar action definitions live in
 labels/content, class-name maps, child slots, repository target data, and event callbacks instead of
 embedding the backend route's text and CSS selectors in shared layout components.
 
-| Component | Inputs and responsibility | State / behavior |
-| --- | --- | --- |
-| `WorkspacePageHeader` | Title, start/action slots, accessible label, class map | Renders the independent page header; optional inert state is caller-controlled. |
-| `WorkspaceFrame` | Panel children, accessible label, optional overlay and class map | Defines the frame and panels slot; caller controls inert state. |
-| `WorkspacePanel` | Header/content/footer slots, optional overlay, layout mode, class map | Defines a panel's three regions; caller controls its inert state. |
-| `WorkspaceActionButton` | Visible label, optional icon/status indicator, native button attributes and callback | Native button behavior is supplied by props. |
-| `AnchoredDialog` | ID, accessible label, content, close callback, focus refs and optional modal behavior | Owns dialog focus setup/restoration, Escape, and optional Tab containment. |
-| `ActionToolbar` | Accessible label, action definitions, class map | Owns pointer-drag offset and click suppression; each action may provide a callback. |
-| `CardSummary` / `CardPreview` / `CardConnector` | Summary or preview data, icons, action list, labels, class maps | Preview owns its notes field; toolbar behavior is composed through `ActionToolbar`. |
-| `GitHubSyncDialog` | Repository target, copy, close/test/save callbacks, class map | Owns the transient password-field value; it does not persist credentials or test GitHub access itself. |
+| Component                                       | Inputs and responsibility                                                             | State / behavior                                                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `WorkspacePageHeader`                           | Title, start/action slots, accessible label, class map                                | Renders the independent page header; optional inert state is caller-controlled.                        |
+| `WorkspaceFrame`                                | Panel children, accessible label, optional overlay and class map                      | Defines the frame and panels slot; caller controls inert state.                                        |
+| `WorkspacePanel`                                | Header/content/footer slots, optional overlay, layout mode, class map                 | Defines a panel's three regions; caller controls its inert state.                                      |
+| `WorkspaceActionButton`                         | Visible label, optional icon/status indicator, native button attributes and callback  | Native button behavior is supplied by props.                                                           |
+| `AnchoredDialog`                                | ID, accessible label, content, close callback, focus refs and optional modal behavior | Owns dialog focus setup/restoration, Escape, and optional Tab containment.                             |
+| `ActionToolbar`                                 | Accessible label, action definitions, class map                                       | Owns pointer-drag offset and click suppression; each action may provide a callback.                    |
+| `CardSummary` / `CardPreview` / `CardConnector` | Summary or preview data, icons, action list, labels, class maps                       | Preview owns its notes field; toolbar behavior is composed through `ActionToolbar`.                    |
+| `CarouselControls`                              | Ordered card items, active ID, labels, and selection callback                         | Renders wrapping previous/next controls and per-card indicators only for multi-card sets.              |
+| `GitHubSyncDialog`                              | Repository target, copy, close/test/save callbacks, class map                         | Owns the transient password-field value; it does not persist credentials or test GitHub access itself. |
 
-These are reusable UI primitives, not a finished authoring system: the page currently supplies no
-toolbar action handlers, and its GitHub Sync test callback only closes the dialog.
+The tree displays validated repository reads. Rename/reorder/create/delete interactions and editor
+fields remain local page-memory drafts until Save changes publishes the complete v2 snapshot; v1
+drafts remain local until migration. The separate card toolbar actions remain without handlers, and
+the GitHub Sync test callback only closes the dialog.
 
 ## Panel construction
 
@@ -211,18 +214,18 @@ applies because the panels switch to stacked rows.
 
 ### Box and dimension register
 
-| Element | Parent / containing block | Width or track | Height or tracks | Border / radius |
-| --- | --- | --- | --- | --- |
-| Backend header | `.backend-shell` | Full viewport width | 56px minimum | Bottom divider |
-| Header inner | Header | `min(100%, 1280px)` | 56px minimum | None |
-| Main area | `.backend-shell` | `min(100%, 1280px)` | Flexible remainder | None |
-| Workspace frame | Main content box | Fills main grid cell | Fills main grid cell | 1px / 6px |
-| Panel grid | Workspace frame content box | Two equal `minmax(0, 1fr)` columns | Fills frame | None |
-| Each workspace panel | One panel-grid track | Equal share less gap | Fills panel-grid row | 1px / 4px |
-| Panel layout | Workspace panel inside | Fills panel inside | Header/content/footer grid | None |
-| Header/content/footer cells | Panel layout tracks | Fills row | 41px / flexible / 41px | 1px / 4px |
-| Card stack | Right content cell | `min(100% - 32px, 440px)` | `min(445px, 100% - 32px)` | None |
-| Card preview | Card stack final row | Fills stack width | Fills remaining row | 1px / 6px |
+| Element                     | Parent / containing block   | Width or track                     | Height or tracks           | Border / radius |
+| --------------------------- | --------------------------- | ---------------------------------- | -------------------------- | --------------- |
+| Backend header              | `.backend-shell`            | Full viewport width                | 56px minimum               | Bottom divider  |
+| Header inner                | Header                      | `min(100%, 1280px)`                | 56px minimum               | None            |
+| Main area                   | `.backend-shell`            | `min(100%, 1280px)`                | Flexible remainder         | None            |
+| Workspace frame             | Main content box            | Fills main grid cell               | Fills main grid cell       | 1px / 6px       |
+| Panel grid                  | Workspace frame content box | Two equal `minmax(0, 1fr)` columns | Fills frame                | None            |
+| Each workspace panel        | One panel-grid track        | Equal share less gap               | Fills panel-grid row       | 1px / 4px       |
+| Panel layout                | Workspace panel inside      | Fills panel inside                 | Header/content/footer grid | None            |
+| Header/content/footer cells | Panel layout tracks         | Fills row                          | 41px / flexible / 41px     | 1px / 4px       |
+| Card stack                  | Right content cell          | `min(100% - 32px, 440px)`          | `min(445px, 100% - 32px)`  | None            |
+| Card preview                | Card stack final row        | Fills stack width                  | Fills remaining row        | 1px / 6px       |
 
 The register separates CSS track sizes from element content sizes: panel layout padding and gaps
 consume space inside the panel; each child cell's own border is already included in that cell's
@@ -233,11 +236,11 @@ track size because the app applies `box-sizing: border-box` globally.
 Each `.backend-workspace-panel` is a bordered, 4px-radius panel. Its child
 `.backend-workspace-panel-layout` uses a three-row grid:
 
-| Row | Desktop sizing | Contents |
-| --- | --- | --- |
-| Header | 41px | Panel-specific controls/title |
-| Content | `minmax(0, 1fr)` | Flexible work surface |
-| Footer | 41px | Empty in the current scaffold |
+| Row     | Desktop sizing   | Contents                      |
+| ------- | ---------------- | ----------------------------- |
+| Header  | 41px             | Panel-specific controls/title |
+| Content | `minmax(0, 1fr)` | Flexible work surface         |
+| Footer  | 41px             | Empty in the current scaffold |
 
 The layout has a 4px inset and 4px gaps between rows. Header, content, and footer each have their
 own 1px border and 4px radius. The 41px row height includes the region's border and padding; it is
@@ -289,8 +292,38 @@ button padding and font size. The base workspace content and footer are empty.
 
 The Select explorer is positioned absolutely against `.backend-workspace-container`, so it covers
 both side-by-side workspace panels. `inset: -1px` extends it over the outer frame border; it has
-`z-index: 2`, `overflow: auto`, a 1px border, 6px radius, 4px inset, and a 41px close button at
-top/right 4px. The rest of the overlay is empty: there is no page-selection list yet.
+`z-index: 2`, a 1px border, 6px radius, 8px inset, and a 41px close button at top/right 4px. Its
+content contains a scrollable documentation tree loaded from a validated GitHub repository
+snapshot. The UI maps schema-v1 pages to a derived virtual `Cards` container and places that page's
+cards under it. For schema v2, persisted containers and card-container relationships are displayed
+directly. Virtual container IDs use the stable page ID as their key; they are not stored records or
+v2 migration IDs.
+An empty repository is shown as empty and the explorer remains available for local page drafts.
+
+The tree hierarchy is **page → card container → cards**, with nested pages using the same structure.
+Repository pages, nested pages, and cards populate the tree; the v1 adapter supplies one virtual
+container per page, while v2 records preserve persisted containers. Creating a local page or nested
+page also creates a default `Cards` container. The toolbar can add pages, nested pages, containers,
+and cards;
+containers can be added to a selected page and cards to a selected container. Every item uses the
+same `.backend-tree-row` panel surface. Disclosure and row-action controls are 26×26px at all
+viewport sizes. Expandable page and container rows can expand/collapse. Each row supports inline
+rename, moving up/down among siblings, and confirmed deletion; deleting a parent removes its
+descendants. Selecting an item updates the card-editor preview behind the overlay, which can be
+seen after closing it. Child connectors use the shared CSS elbow and vertical-branch rules at every
+tree level; they are decorative, not separate data objects. The preview uses the shared
+container/card resolver for v1 virtual containers and persisted v2 containers. Selecting a card
+container previews its first card when available; selecting an empty container edits the container
+and shows an empty preview. Multi-card containers expose
+previous/next controls and one indicator per card. Changing the preview card also changes the
+selected record in the left editor. The editor covers name, category, card tag, and card content
+(or description for pages and containers). Draft fields are held in page memory by stable record
+ID, so switching cards preserves each card's draft; refresh discards them. Repository data is
+read-only; tree edits and editor drafts are local and are not written to GitHub. Loading and read
+errors are displayed explicitly, with a retry for read errors. For a schema-v2 snapshot, the editor
+offers Save changes; it validates and publishes the complete draft as one commit after checking the
+snapshot head. A changed branch is reported as a conflict and the local draft remains available.
+Schema-v1 drafts cannot be saved until the separately reviewed migration is applied.
 
 The GitHub Sync dialog is a separate absolute overlay inside workspace panel 1, with `inset: 0`;
 workspace panel 2 is outside its bounds and remains unaffected. The overlay has its own
@@ -314,11 +347,11 @@ password field's temporary component state, but the page does not wire the token
 or persistence. The Connection Test callback currently dismisses the dialog; it does not test a
 connection. Save & Connect is disabled.
 
-### Workspace panel 2: preview and card-editor scaffold
+### Workspace panel 2: card-container preview
 
-The header uses three columns for the Live Preview button, centered Card Editor title, and
-Real-Time-Sync button. It uses 4px padding at desktop, while the left spread header has its own
-3px vertical-padding override. Its two buttons have no handlers.
+The header uses three columns for the Card Editor status button, centered Live Preview title, and
+Real-Time-Sync status button. It uses 4px padding at desktop, while the left spread header has its
+own 3px vertical-padding override. The status buttons have no handlers.
 The center content region has the `.backend-workspace-panel-content--home-background` treatment
 and clips its decorative background layers.
 
@@ -335,13 +368,20 @@ composed of:
 ├── Flexible content row · minmax(0, 1fr)
 │   └── .backend-card-editor-content · grid; padding 4px; gap 4px
 │       ├── Card heading · minimum 45px
-│       │   ├── Tensor Flow title + icon
-│       │   └── Neural Networks category
-│       └── Remaining content space · currently empty
+│       │   ├── Active card title + icon
+│       │   └── Active card category
+│       └── Active card summary and optional carousel controls
 ├── Toolbar row · 33px
 │   └── clipped viewport → translated flex track → 15 × 24px icon buttons
 └── Notes input row · 33px
 ```
+
+The preview title, category, and summary follow the active card. Containers with zero or one card
+do not render carousel controls or indicators. When a container has multiple cards, controls wrap
+between cards and indicators select a specific card. The backend and public page use the shared
+resolver and `CarouselControls`; the public page renders only the selected slide using the complete
+legacy card-content view. Backend field editing and public rich-content rendering are not yet one
+identical card component.
 
 The 15 toolbar action labels, in render order, are: Preview card, Card files, Video preview,
 Card layout, Terminal, Card workflow, Bookmark card, Duplicate card, Share card, Card source,
@@ -407,31 +447,35 @@ when no usable previous element exists.
 
 ### Inert regions while an overlay is open
 
-| State | Inert | Still outside the overlay |
-| --- | --- | --- |
-| Closed | Nothing | Entire route |
-| Select explorer open | Independent route header and both workspace panels (`.backend-workspace-panels`) | Explorer overlay |
-| GitHub Sync open | Only panel 1's `.backend-workspace-panel-layout` | Route header, panel 2, and GitHub Sync overlay |
+| State                | Inert                                                                            | Still outside the overlay                      |
+| -------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Closed               | Nothing                                                                          | Entire route                                   |
+| Select explorer open | Independent route header and both workspace panels (`.backend-workspace-panels`) | Explorer overlay                               |
+| GitHub Sync open     | Only panel 1's `.backend-workspace-panel-layout`                                 | Route header, panel 2, and GitHub Sync overlay |
 
-The Select explorer declares `role="dialog"` and `aria-modal="true"` and handles Tab by preventing
-the default and refocusing its only control, the close button. GitHub Sync declares `role="dialog"`
-but does not set `aria-modal` or add an explicit Tab handler. Both overlays close on Escape. Neither
-currently implements backdrop-click dismissal.
+The Select explorer declares `role="dialog"` and `aria-modal="true"` and traps Tab within its
+controls. GitHub Sync declares `role="dialog"` but does not set `aria-modal` or add an explicit Tab
+handler. Both overlays close on Escape. Neither currently implements backdrop-click dismissal.
 
 ### Button behavior inventory
 
-| Control | Current behavior |
-| --- | --- |
-| Back to home | Navigates to `APP_ROUTES.home`. |
-| Deployments | Button with no click handler. |
-| Github Sync | Sets `openPanel` to `'github-sync'`. |
-| Select | Sets `openPanel` to `'explorer'`. |
-| Connection Test | Closes GitHub Sync; does not perform a test. |
-| Save & Connect | Disabled. |
-| Live Preview / Real-Time-Sync | Buttons with no click handlers. |
-| Model Training summary | Button with no click handler. |
-| Card toolbar actions | 15 buttons with labels/icons/titles, but no action handlers. |
-| Notes-or-commands field | Plain text input; no save or command handler. |
+| Control                           | Current behavior                                                                                                |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Back to home                      | Navigates to `APP_ROUTES.home`.                                                                                 |
+| Deployments                       | Button with no click handler.                                                                                   |
+| Github Sync                       | Sets `openPanel` to `'github-sync'`.                                                                            |
+| Select                            | Sets `openPanel` to `'explorer'`.                                                                               |
+| Tree item                         | Selects the item and updates the workspace preview; page rows with children also have expand/collapse controls. |
+| New page / New subpage / New card | Adds a mock item; subpages and cards are children of the currently selected page/subpage.                       |
+| Rename                            | Opens an inline title input; Enter/Save accepts a nonempty name, Escape/Cancel discards it.                     |
+| Move up / Move down               | Swaps the item with an adjacent sibling under the same parent.                                                  |
+| Delete                            | Opens confirmation; deleting a page also removes all descendants and selects a remaining item.                  |
+| Connection Test                   | Closes GitHub Sync; does not perform a test.                                                                    |
+| Save & Connect                    | Disabled.                                                                                                       |
+| Live Preview / Real-Time-Sync     | Buttons with no click handlers.                                                                                 |
+| Model Training summary            | Button with no click handler.                                                                                   |
+| Card toolbar actions              | 15 buttons with labels/icons/titles, but no action handlers.                                                    |
+| Notes-or-commands field           | Plain text input; no save or command handler.                                                                   |
 
 The toolbar's horizontal dragging is handled by `ActionToolbar` and is separate from page-level
 overlay state. Pointer-down records pointer ID, X origin, and current offset, then captures the
@@ -462,13 +506,13 @@ toolbar button does not accidentally invoke a click.
 
 ## Style and containment layers
 
-| Layer | Positioned against | Coverage | Paint/clip behavior |
-| --- | --- | --- | --- |
-| Select explorer (`z-index: 2`) | `.backend-workspace-container` | Whole outer workspace, both columns | `inset: -1px`; own scroll container and frame |
-| GitHub Sync (`z-index: 2`) | Panel 1 (`position: relative`) | Left panel only | `inset: 0`; own grid; clips overflow |
-| Workspace columns | Normal grid flow | Half-width sibling tracks on desktop | Stack at 760px and below |
-| Card-editor stack | Centered by panel 2 content grid | Inside right content region | Capped width/height |
-| Decorative backgrounds | Pseudo-elements of right content | Right content only | Negative z-index within isolated, clipped region |
+| Layer                          | Positioned against               | Coverage                             | Paint/clip behavior                                   |
+| ------------------------------ | -------------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| Select explorer (`z-index: 2`) | `.backend-workspace-container`   | Whole outer workspace, both columns  | `inset: -1px`; tree region scrolls inside the overlay |
+| GitHub Sync (`z-index: 2`)     | Panel 1 (`position: relative`)   | Left panel only                      | `inset: 0`; own grid; clips overflow                  |
+| Workspace columns              | Normal grid flow                 | Half-width sibling tracks on desktop | Stack at 760px and below                              |
+| Card-editor stack              | Centered by panel 2 content grid | Inside right content region          | Capped width/height                                   |
+| Decorative backgrounds         | Pseudo-elements of right content | Right content only                   | Negative z-index within isolated, clipped region      |
 
 The card editor content region uses `isolation: isolate` and `overflow: hidden`; its dot-grid and
 glow are pseudo-elements behind content, not extra panel nodes. The connector between the summary
@@ -492,14 +536,14 @@ These are the current CSS breakpoints and rules, not guarantees about a fixed vi
 
 ## Reading the code
 
-| Concern | Source |
-| --- | --- |
-| Route composition, overlay visibility, and route callbacks | [`BackendPage.tsx`](../src/pages/BackendPage.tsx) |
-| Shared layout, dialog, card, and toolbar component contracts | [`components/`](../src/components/) |
-| Backend copy and toolbar action definitions | [`backendWorkspaceConfig.ts`](../src/pages/backendWorkspaceConfig.ts) |
-| Workspace, panel, overlay, card-stack, and responsive geometry | [`styles.css`](../src/app/styles.css) |
-| Backend route protection and route-level ownership | [`AppRoutes.tsx`](../src/app/AppRoutes.tsx) |
-| Current verified product capability and limits | [`PRODUCT_BRIEF.md`](./PRODUCT_BRIEF.md) |
+| Concern                                                        | Source                                                                |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Route composition, overlay visibility, and route callbacks     | [`BackendPage.tsx`](../src/pages/BackendPage.tsx)                     |
+| Shared layout, dialog, card, and toolbar component contracts   | [`components/`](../src/components/)                                   |
+| Backend copy and toolbar action definitions                    | [`backendWorkspaceConfig.ts`](../src/pages/backendWorkspaceConfig.ts) |
+| Workspace, panel, overlay, card-stack, and responsive geometry | [`styles.css`](../src/app/styles.css)                                 |
+| Backend route protection and route-level ownership             | [`AppRoutes.tsx`](../src/app/AppRoutes.tsx)                           |
+| Current verified product capability and limits                 | [`PRODUCT_BRIEF.md`](./PRODUCT_BRIEF.md)                              |
 
 The focused tests in [`BackendPage.test.tsx`](../src/pages/BackendPage.test.tsx) cover the
 route scaffold and GitHub Sync overlay ownership, content, and focus behavior. Use the current

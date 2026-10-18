@@ -139,6 +139,24 @@ describe('public route and drawer', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ tree: { sha: 'b'.repeat(40) } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ tree: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
       );
     vi.stubGlobal('fetch', fetchMock);
     try {
@@ -454,15 +472,19 @@ describe('public route and drawer', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),
-      );
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ object: { sha: 'a'.repeat(40) } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tree: { sha: 'b'.repeat(40) } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tree: [] })));
     vi.stubGlobal('fetch', fetchMock);
     try {
       renderAt('/backend');
 
       expect(await screen.findByRole('banner', { name: 'Backend header' })).toBeVisible();
       expect(screen.getByRole('heading', { name: 'Backend', level: 1 })).toBeInTheDocument();
+      expect(await screen.findByText(/This repository has no pages yet/)).toBeInTheDocument();
       expect(window.sessionStorage.getItem('greendocs.github.pat')).not.toBeNull();
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(5);
     } finally {
       vi.unstubAllGlobals();
     }

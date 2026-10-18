@@ -2,19 +2,28 @@ import { createElement, useEffect, useMemo, useRef, useState, type PointerEvent 
 import {
   assetExtensionForMimeType,
   type CardRecord,
+  type CardRecordV2,
   type PageRecord,
+  type PageRecordV2,
   type RepositorySnapshotResponse,
   type StoredAttachmentMimeType,
 } from '../lib/content';
 import { useAuth } from '../features/auth';
 import { createGitHubRepositoryClient } from '../features/github';
 import { Button } from '../components/Primitives';
+import { CarouselControls } from '../components';
+import {
+  resolveRepositoryPagePreviews,
+  virtualContainerIdForPage,
+} from '../lib/content-resolution';
 
-interface PageNode extends PageRecord {
+type RepositoryPageRecord = PageRecord | PageRecordV2;
+
+type PageNode = RepositoryPageRecord & {
   children: PageNode[];
-}
+};
 
-function buildPageTree(pages: readonly PageRecord[]): PageNode[] {
+function buildPageTree(pages: readonly RepositoryPageRecord[]): PageNode[] {
   const nodes = new Map(pages.map((page) => [page.id, { ...page, children: [] as PageNode[] }]));
   const roots: PageNode[] = [];
   for (const node of nodes.values()) {
@@ -27,12 +36,6 @@ function buildPageTree(pages: readonly PageRecord[]): PageNode[] {
   };
   sort(roots);
   return roots;
-}
-
-function orderedCards(cards: readonly CardRecord[], pageId: string): CardRecord[] {
-  return cards
-    .filter((card) => card.pageId === pageId)
-    .sort((left, right) => left.order - right.order || left.title.localeCompare(right.title));
 }
 
 function mediaUrl(
@@ -48,7 +51,13 @@ function mediaUrl(
     .join('/')}/content/media/${assetId}.${extension}`;
 }
 
-function CardView({ card, snapshot }: { card: CardRecord; snapshot: RepositorySnapshotResponse }) {
+function CardView({
+  card,
+  snapshot,
+}: {
+  card: CardRecord | CardRecordV2;
+  snapshot: RepositorySnapshotResponse;
+}) {
   return (
     <article className="published-card">
       <header className="published-card-header">
@@ -116,15 +125,24 @@ function CardView({ card, snapshot }: { card: CardRecord; snapshot: RepositorySn
 
 function PageView({
   page,
-  cards,
   snapshot,
   level,
 }: {
   page: PageNode;
-  cards: readonly CardRecord[];
   snapshot: RepositorySnapshotResponse;
   level: number;
 }) {
+  const [selectedCardIds, setSelectedCardIds] = useState<Record<string, string>>({});
+  const virtualContainerId = virtualContainerIdForPage(page.id);
+  const activeCardIds = Object.fromEntries(
+    Object.entries(selectedCardIds).filter(([containerId, cardId]) =>
+      snapshot.schemaVersion === 2
+        ? snapshot.cards.some((card) => card.containerId === containerId && card.id === cardId)
+        : containerId === virtualContainerId &&
+          snapshot.cards.some((card) => card.pageId === page.id && card.id === cardId),
+    ),
+  );
+  const previews = resolveRepositoryPagePreviews(snapshot, page.id, activeCardIds);
   const heading = createElement(
     `h${Math.min(level + 1, 6)}`,
     { id: `page-${page.id}` },
@@ -134,13 +152,48 @@ function PageView({
     <section className="published-page" aria-labelledby={`page-${page.id}`}>
       {heading}
       {page.description && <p className="published-page-description">{page.description}</p>}
-      <div className="published-card-list">
-        {orderedCards(cards, page.id).map((card) => (
-          <CardView key={card.id} card={card} snapshot={snapshot} />
-        ))}
-      </div>
+      {previews.length === 0 ? (
+        <p className="published-card-empty">No card containers on this page.</p>
+      ) : (
+        previews.map((preview) => {
+          const activeCard = preview.activeCard;
+          const containerLabel =
+            snapshot.schemaVersion === 2 ? preview.container.title : page.title;
+          return (
+            <div
+              key={preview.container.id}
+              className="published-card-list"
+              role="group"
+              aria-label={`Cards for ${page.title}: ${preview.container.title}`}
+            >
+              {activeCard ? (
+                <CardView key={activeCard.id} card={activeCard} snapshot={snapshot} />
+              ) : (
+                <p className="published-card-empty">No cards in this container.</p>
+              )}
+              <CarouselControls
+                items={preview.cards}
+                activeItemId={activeCard?.id ?? null}
+                onSelect={(cardId) =>
+                  setSelectedCardIds((current) => ({
+                    ...current,
+                    [preview.container.id]: cardId,
+                  }))
+                }
+                ariaLabel={`Card carousel for ${containerLabel}`}
+                previousLabel={`Previous card in ${containerLabel}`}
+                nextLabel={`Next card in ${containerLabel}`}
+                indicatorLabel={(card, index) =>
+                  `Show card ${index + 1} in ${containerLabel}: ${card.title}`
+                }
+                className="published-card-carousel"
+              />
+            </div>
+          );
+        })
+      )}
       {page.children.map((child) => (
-        <PageView key={child.id} page={child} cards={cards} snapshot={snapshot} level={level + 1} />
+        <PageView key={child.id} page={child} snapshot={snapshot} level={level + 1} />
       ))}
     </section>
   );
@@ -259,13 +312,7 @@ export function HomePage() {
         {!loading && !error && snapshot && (
           <div className="published-page-tree">
             {pageTree.map((page) => (
-              <PageView
-                key={page.id}
-                page={page}
-                cards={snapshot.cards}
-                snapshot={snapshot}
-                level={1}
-              />
+              <PageView key={page.id} page={page} snapshot={snapshot} level={1} />
             ))}
           </div>
         )}

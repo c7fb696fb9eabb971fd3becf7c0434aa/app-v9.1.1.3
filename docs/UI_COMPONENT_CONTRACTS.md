@@ -24,19 +24,21 @@ the existing backend CSS class names. Shared component contracts take accessible
 slots, class maps, data, and callbacks as props rather than embedding page-specific copy or class
 selectors.
 
-| Component | Identity and inputs | State and behavior | Rendered output |
-| --- | --- | --- | --- |
-| `WorkspacePageHeader` | Page title, start/action slots, accessible name, class map | Parent-controlled inert state | Independent page header with caller-defined content. |
-| `WorkspaceFrame` / `WorkspacePanel` | Accessible names, panel/region slots, optional overlay, layout mode and class maps | Parent controls inert state and overlay selection | Workspace frame and header/content/footer panel structure. |
-| `WorkspaceActionButton` | Label, optional icon/status indicator, native button attributes | Parent-controlled callback and disabled/expanded state | Native accessible button with optional icon and status dot. |
-| `AnchoredDialog` | ID, accessible name, content, close callback, focus refs and modal flag | Escape dismissal; focus setup/restoration; Tab containment when modal | Anchored dialog surface with caller-provided content. |
-| `ActionToolbar` | Accessible name, action records, class map | Owns pointer dragging and accidental-click suppression; action callbacks are optional | Data-driven icon toolbar. |
-| `CardSummary` / `CardPreview` / `CardConnector` | Summary/preview data, icons, labels, actions, class maps | Preview owns temporary notes input; toolbar owns drag state | Summary button, decorative connector, and structured card preview. |
-| `GitHubSyncDialog` | Repository target, display copy, callbacks, class map | Owns temporary password input; does not persist credentials | Configurable repository dialog and result/footer regions. |
+| Component                                       | Identity and inputs                                                                | State and behavior                                                                                                        | Rendered output                                                                 |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `WorkspacePageHeader`                           | Page title, start/action slots, accessible name, class map                         | Parent-controlled inert state                                                                                             | Independent page header with caller-defined content.                            |
+| `WorkspaceFrame` / `WorkspacePanel`             | Accessible names, panel/region slots, optional overlay, layout mode and class maps | Parent controls inert state and overlay selection                                                                         | Workspace frame and header/content/footer panel structure.                      |
+| `WorkspaceActionButton`                         | Label, optional icon/status indicator, native button attributes                    | Parent-controlled callback and disabled/expanded state                                                                    | Native accessible button with optional icon and status dot.                     |
+| `AnchoredDialog`                                | ID, accessible name, content, close callback, focus refs and modal flag            | Escape dismissal; focus setup/restoration; Tab containment when modal                                                     | Anchored dialog surface with caller-provided content.                           |
+| `ActionToolbar`                                 | Accessible name, action records, class map                                         | Owns pointer dragging and accidental-click suppression; action callbacks are optional                                     | Data-driven icon toolbar.                                                       |
+| `CardSummary` / `CardPreview` / `CardConnector` | Summary/preview data, icons, labels, actions, class maps                           | Preview owns temporary notes input; toolbar owns drag state                                                               | Summary button, decorative connector, and structured card preview.              |
+| `CarouselControls`                              | Ordered items, active item ID, labels, class prefix, selection callback            | Parent controls the active stable ID; controls wrap previous/next and indicators; fewer than two items render no controls | Accessible previous/next buttons and one labeled, focusable indicator per item. |
+| `GitHubSyncDialog`                              | Repository target, display copy, callbacks, class map                              | Owns temporary password input; does not persist credentials                                                               | Configurable repository dialog and result/footer regions.                       |
 
-These components provide reusable presentation contracts, not an implemented editor or sync
-workflow. The backend page currently leaves toolbar actions unwired, and its GitHub Sync test
-callback only closes the dialog.
+These components provide reusable presentation contracts. The backend tree reads a validated
+repository snapshot and supports page-memory-only selection, creation, rename, sibling reorder, and
+cascading delete interactions; it does not persist drafts or write to GitHub. The card toolbar
+actions remain unwired, and the GitHub Sync test callback only closes the dialog.
 
 ## Route flow and documentation home
 

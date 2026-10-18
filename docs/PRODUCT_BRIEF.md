@@ -39,7 +39,7 @@ source-control history, and static hosting. The application has no server-side A
 - The application has no server-side API or external database. Introducing either is a
   product/architecture change, not an assumption agents may make.
 
-## Current implementation (verified 2026-10-13)
+## Current implementation (verified 2026-10-17)
 
 ### Available in the application
 
@@ -48,19 +48,32 @@ source-control history, and static hosting. The application has no server-side A
   repository, and stores the PAT in tab-scoped session storage. The app revalidates it with GitHub
   after refresh; sign-out and invalid credentials clear it.
 - The protected `/home` route reads the repository's Git ref, commit, tree, and relevant blobs;
-  validates records; and renders pages, nested pages, cards, and supported attachments.
+  validates schema-v1 or schema-v2 records; and renders page hierarchy with independently
+  swappable container cards and supported attachments.
 - The protected, undiscoverable `/#/backend` route renders an independent header and a two-panel
-  workspace scaffold. It includes a nested visual card-editor preview and GitHub Sync / Select
-  overlays, but no user-facing authoring or publishing workflow. See the
+  workspace. Its Select overlay contains a validated, read-only repository snapshot. Schema-v1
+  pages/cards are adapted to a page/nested-page/virtual-container/card tree; schema-v2 containers
+  and cards retain their persisted IDs and names. New pages and nested pages receive a default
+  container; users can add containers and cards inside a selected
+  container, select items, rename them, reorder siblings, and confirm cascading deletion. Every
+  tree item is rendered as a panel, and child rows use shared connector styling. Selecting a
+  container drives its card preview; multi-card carousel selection stays synchronized with the
+  record editor, with unsaved fields kept in page memory by record ID. Empty and single-card
+  containers have no carousel controls. Schema-v2 edits can be saved as one atomic commit after
+  full-content validation and expected-head checks; schema-v1 edits remain local until migration.
+  Unsaved tree edits and drafts reset on refresh. The backend and public page use the same
+  selection resolver and carousel controls for schema-v1 virtual containers and persisted
+  schema-v2 containers. No user-facing v1 migration workflow is implemented. See
+  the
   [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md) for its as-built composition.
-- There is no user-facing authoring or publish workflow. The repository client has a tested publish
-  primitive, but no page calls it.
+- The backend does not yet provide persistent drafts or a user-facing v1 migration workflow.
+  Schema-v2 records can be saved directly to the configured repository.
 - GitHub API requests use `no-store`; repository and schema boundaries have tests.
 - GitHub Actions runs CI and deploys the static web app to GitHub Pages from `main`.
 
 ### Not established by the repository
 
-- A user-facing editor or authoring/publishing workflow.
+- Persistent local drafts or v1 migration tooling.
 - A staffed support process or named documentation owners.
 - A prioritized product roadmap maintained in this repository.
 

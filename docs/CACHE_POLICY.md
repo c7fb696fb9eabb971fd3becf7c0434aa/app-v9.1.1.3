@@ -12,6 +12,6 @@ The app intentionally has no service worker or persistent query cache. Only publ
 
 ## Invalidation
 
-Sign-out and invalid-token responses clear the PAT from memory and session storage. The current
-`/backend` route has no draft state or publishing UI. Do not claim Pages deployment based only on a
-successful repository commit.
+Sign-out and invalid-token responses clear the PAT from memory and session storage. The `/backend`
+route keeps editor drafts and tree edits in page memory only; they are lost on refresh and are not
+published. Do not claim Pages deployment based only on a successful repository commit.

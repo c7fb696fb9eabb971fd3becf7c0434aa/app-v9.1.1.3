@@ -1,4 +1,5 @@
 export { ActionToolbar, type ToolbarAction } from './ActionToolbar';
+export { CarouselControls, type CarouselItem } from './CarouselControls';
 export { CardConnector, CardPreview, CardSummary } from './CardPreview';
 export {
   GitHubSyncDialog,

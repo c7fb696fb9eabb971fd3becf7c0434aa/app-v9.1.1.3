@@ -35,6 +35,8 @@ is implemented now.
 - [ADR 0001: GitHub-only architecture](./adr/0001-system-architecture.md) — accepted 2026-10-11.
 - [ADR 0002: PAT authentication and session security](./adr/0002-pat-auth-and-session-security.md) —
   accepted with documented residual risk 2026-10-11.
+- [ADR 0003: Container-based card model](./adr/0003-container-based-card-model.md) — accepted
+  2026-10-17.
 
 ## Reports and snapshots
 

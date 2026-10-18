@@ -61,7 +61,8 @@ export interface CardRecord {
   attachments: Attachment[];
 }
 
-export interface RepositorySnapshotResponse {
+export interface RepositoryV1SnapshotResponse {
+  schemaVersion?: 1;
   sourceCommit: string;
   pages: PageRecord[];
   cards: CardRecord[];
@@ -280,3 +281,220 @@ export const ContentRecordsSchema = z
       }
     }
   });
+
+export interface CardContainerRecordV2 {
+  schemaVersion: 2;
+  id: string;
+  pageId: string;
+  title: string;
+  order: number;
+}
+
+export type PageRecordV2 = Omit<PageRecord, 'schemaVersion'> & { schemaVersion: 2 };
+export type CardRecordV2 = Omit<CardRecord, 'schemaVersion' | 'pageId'> & {
+  schemaVersion: 2;
+  containerId: string;
+};
+
+export interface ContentRecordsV2 {
+  schemaVersion: 2;
+  pages: PageRecordV2[];
+  containers: CardContainerRecordV2[];
+  cards: CardRecordV2[];
+}
+
+export const CONTENT_SCHEMA_VERSION_V2 = 2 as const;
+export const CONTENT_MANIFEST_PATH = 'content/manifest.json';
+
+export const ContentManifestV2Schema = z.object({
+  schemaVersion: z.literal(CONTENT_SCHEMA_VERSION_V2),
+});
+
+export interface RepositoryV2SnapshotResponse {
+  schemaVersion: 2;
+  sourceCommit: string;
+  pages: PageRecordV2[];
+  containers: CardContainerRecordV2[];
+  cards: CardRecordV2[];
+  repository: {
+    owner: string;
+    name: string;
+    branch: string;
+  };
+}
+
+export type RepositorySnapshotResponse =
+  RepositoryV1SnapshotResponse | RepositoryV2SnapshotResponse;
+
+export function containerStoragePath(id: string): string {
+  return `content/containers/${StableIdSchema.parse(id)}.json`;
+}
+
+export const PageRecordV2Schema = PageRecordSchema.extend({
+  schemaVersion: z.literal(CONTENT_SCHEMA_VERSION_V2),
+});
+
+export const CardContainerRecordV2Schema = z.object({
+  schemaVersion: z.literal(CONTENT_SCHEMA_VERSION_V2),
+  id: StableIdSchema,
+  pageId: StableIdSchema,
+  title: z.string().trim().min(1).max(CONTENT_LIMITS.titleCharacters),
+  order: z.number().int().min(0).max(CONTENT_LIMITS.orderValue),
+});
+
+export const CardRecordV2Schema = CardRecordSchema.omit({
+  schemaVersion: true,
+  pageId: true,
+}).extend({
+  schemaVersion: z.literal(CONTENT_SCHEMA_VERSION_V2),
+  containerId: StableIdSchema,
+});
+
+export const ContentRecordsV2Schema = z
+  .object({
+    schemaVersion: z.literal(CONTENT_SCHEMA_VERSION_V2),
+    pages: z.array(PageRecordV2Schema),
+    containers: z.array(CardContainerRecordV2Schema),
+    cards: z.array(CardRecordV2Schema),
+  })
+  .superRefine((records, context) => {
+    const pagesById = new Map<string, PageRecordV2>();
+    const pageIds = new Set<string>();
+    const allRecordIds = new Set<string>();
+    const siblingSlugs = new Set<string>();
+    const containersById = new Map<string, CardContainerRecordV2>();
+
+    function addRecordId(id: string, path: (string | number)[]) {
+      if (allRecordIds.has(id)) {
+        context.addIssue({
+          code: 'custom',
+          path,
+          message: 'Record IDs must be unique across pages, containers, and cards',
+        });
+      }
+      allRecordIds.add(id);
+    }
+
+    for (const [index, page] of records.pages.entries()) {
+      addRecordId(page.id, ['pages', index, 'id']);
+      pageIds.add(page.id);
+      pagesById.set(page.id, page);
+      const siblingKey = `${page.parentId ?? 'root'}:${page.slug}`;
+      if (siblingSlugs.has(siblingKey)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['pages', index, 'slug'],
+          message: 'Page slug must be unique among siblings',
+        });
+      }
+      siblingSlugs.add(siblingKey);
+    }
+
+    for (const [index, page] of records.pages.entries()) {
+      if (page.parentId && !pagesById.has(page.parentId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['pages', index, 'parentId'],
+          message: 'Parent page does not exist',
+        });
+      }
+      const visited = new Set<string>([page.id]);
+      let parentId = page.parentId;
+      while (parentId) {
+        if (visited.has(parentId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['pages', index, 'parentId'],
+            message: 'Page hierarchy cannot contain cycles',
+          });
+          break;
+        }
+        visited.add(parentId);
+        parentId = pagesById.get(parentId)?.parentId ?? null;
+      }
+    }
+
+    for (const [index, container] of records.containers.entries()) {
+      addRecordId(container.id, ['containers', index, 'id']);
+      containersById.set(container.id, container);
+      if (!pageIds.has(container.pageId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['containers', index, 'pageId'],
+          message: 'Container page does not exist',
+        });
+      }
+    }
+
+    for (const [index, card] of records.cards.entries()) {
+      addRecordId(card.id, ['cards', index, 'id']);
+      if (!containersById.has(card.containerId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['cards', index, 'containerId'],
+          message: 'Card container does not exist',
+        });
+      }
+      const attachmentIds = new Set<string>();
+      for (const [attachmentIndex, attachment] of card.attachments.entries()) {
+        if (attachmentIds.has(attachment.id)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['cards', index, 'attachments', attachmentIndex, 'id'],
+            message: 'Attachment IDs must be unique within a card',
+          });
+        }
+        attachmentIds.add(attachment.id);
+      }
+    }
+  });
+
+export function migrateV1ContentRecords(
+  value: unknown,
+  createContainerId: () => string,
+): ContentRecordsV2 {
+  const legacy = ContentRecordsSchema.safeParse(value);
+  if (!legacy.success) throw new Error('legacy_content_invalid');
+
+  const existingIds = new Set([
+    ...legacy.data.pages.map((page) => page.id),
+    ...legacy.data.cards.map((card) => card.id),
+  ]);
+  const containerIdByPageId = new Map<string, string>();
+  const containers: CardContainerRecordV2[] = legacy.data.pages.map((page) => {
+    const id = createContainerId();
+    if (!StableIdSchema.safeParse(id).success || existingIds.has(id)) {
+      throw new Error('migration_container_id_invalid');
+    }
+    existingIds.add(id);
+    containerIdByPageId.set(page.id, id);
+    return {
+      schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+      id,
+      pageId: page.id,
+      title: 'Cards',
+      order: 0,
+    };
+  });
+
+  const migrated: ContentRecordsV2 = {
+    schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+    pages: legacy.data.pages.map(({ schemaVersion: _schemaVersion, ...page }) => ({
+      ...page,
+      schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+    })),
+    containers,
+    cards: legacy.data.cards.map(({ schemaVersion: _schemaVersion, pageId, ...card }) => {
+      const containerId = containerIdByPageId.get(pageId);
+      if (!containerId) throw new Error('legacy_content_migration_invalid');
+      return {
+        ...card,
+        schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+        containerId,
+      };
+    }),
+  };
+  const result = ContentRecordsV2Schema.safeParse(migrated);
+  if (!result.success) throw new Error('legacy_content_migration_invalid');
+  return result.data;
+}

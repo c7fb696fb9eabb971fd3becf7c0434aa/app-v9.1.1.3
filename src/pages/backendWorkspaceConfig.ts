@@ -17,7 +17,7 @@ export const backendWorkspaceCopy = {
     sync: 'backend-github-sync-panel',
   },
   selectionModeLabel: 'Selection mode',
-  selectionModeText: 'Select Page, Sub Page or Card',
+  selectionModeText: 'Select Page, Nested Page, Container or Card',
   syncTriggerLabel: 'Github Sync',
   selectTriggerLabel: 'Select',
   livePreviewLabel: 'Live Preview',

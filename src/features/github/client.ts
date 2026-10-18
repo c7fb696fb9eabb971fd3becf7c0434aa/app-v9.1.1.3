@@ -1,12 +1,23 @@
 import {
+  CardContainerRecordV2Schema,
   CardRecordSchema,
+  CardRecordV2Schema,
   cardStoragePath,
+  CONTENT_MANIFEST_PATH,
+  ContentManifestV2Schema,
   ContentRecordsSchema,
+  ContentRecordsV2Schema,
+  CONTENT_SCHEMA_VERSION_V2,
   PageRecordSchema,
+  PageRecordV2Schema,
   pageStoragePath,
   SCHEMA_VERSION,
+  containerStoragePath,
   type CardRecord,
+  type CardContainerRecordV2,
+  type CardRecordV2,
   type PageRecord,
+  type PageRecordV2,
   type RepositorySnapshotResponse,
 } from '../../lib/content';
 import { GITHUB_REPOSITORY } from '../../../config';
@@ -16,6 +27,7 @@ const REPOSITORY_PATH = `/repos/${OWNER}/${REPOSITORY}`;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/;
 const PAGE_PATH_PATTERN = /^content\/pages\/([0-9a-f-]{36})\.json$/;
 const CARD_PATH_PATTERN = /^content\/cards\/([0-9a-f-]{36})\.json$/;
+const CONTAINER_PATH_PATTERN = /^content\/containers\/([0-9a-f-]{36})\.json$/;
 type RequestGithub = (path: string, init?: RequestInit) => Promise<Response>;
 
 interface GitHubTreeEntry {
@@ -42,7 +54,7 @@ interface GitHubBlob {
   encoding?: string;
 }
 
-function failForResponse(response: Response): Error {
+function failForResponse(response: Response, path: string): Error {
   if (response.status === 401) return new Error('github_token_invalid');
   if (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
     return new Error('github_rate_limited');
@@ -52,6 +64,9 @@ function failForResponse(response: Response): Error {
   }
   if (response.status === 429) return new Error('github_rate_limited');
   if (response.status === 409) return new Error('repository_head_changed');
+  if (response.status === 422 && path.includes('/git/refs/heads/')) {
+    return new Error('repository_head_changed');
+  }
   return new Error('github_request_failed');
 }
 
@@ -61,7 +76,7 @@ async function requestJson<T>(
   init?: RequestInit,
 ): Promise<T> {
   const response = await request(path, init);
-  if (!response.ok) throw failForResponse(response);
+  if (!response.ok) throw failForResponse(response, path);
   try {
     return (await response.json()) as T;
   } catch {
@@ -115,6 +130,50 @@ function parseContentRecords(pages: PageRecord[], cards: CardRecord[]) {
   return result.data;
 }
 
+function parseContentRecordsV2(
+  pages: PageRecordV2[],
+  containers: CardContainerRecordV2[],
+  cards: CardRecordV2[],
+) {
+  const result = ContentRecordsV2Schema.safeParse({
+    schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+    pages,
+    containers,
+    cards,
+  });
+  if (!result.success) throw new Error('invalid_content_relationships');
+  return result.data;
+}
+
+interface GitHubTreeResponse {
+  sha?: string;
+  tree?: GitHubTreeEntry[];
+}
+
+interface GitHubBlobResponse {
+  sha?: string;
+}
+
+interface GitHubCommitResponse {
+  sha?: string;
+}
+
+interface GitHubRefResponse {
+  object?: { sha?: string };
+}
+
+function recordFiles(records: ReturnType<typeof parseContentRecordsV2>) {
+  return [
+    { path: CONTENT_MANIFEST_PATH, record: { schemaVersion: CONTENT_SCHEMA_VERSION_V2 } },
+    ...records.pages.map((record) => ({ path: pageStoragePath(record.id), record })),
+    ...records.containers.map((record) => ({
+      path: containerStoragePath(record.id),
+      record,
+    })),
+    ...records.cards.map((record) => ({ path: cardStoragePath(record.id), record })),
+  ].sort((left, right) => left.path.localeCompare(right.path));
+}
+
 export class GitHubRepositoryClient {
   constructor(private readonly request: RequestGithub) {}
 
@@ -143,15 +202,16 @@ export class GitHubRepositoryClient {
     if (tree.truncated) throw new Error('repository_tree_exceeds_supported_limit');
     if (!Array.isArray(tree.tree)) throw new Error('github_invalid_response');
 
-    const pages: PageRecord[] = [];
-    const cards: CardRecord[] = [];
     const records = tree.tree.filter(
       (entry) =>
         entry.type === 'blob' &&
         typeof entry.path === 'string' &&
-        (PAGE_PATH_PATTERN.test(entry.path) || CARD_PATH_PATTERN.test(entry.path)),
+        (PAGE_PATH_PATTERN.test(entry.path) ||
+          CARD_PATH_PATTERN.test(entry.path) ||
+          CONTAINER_PATH_PATTERN.test(entry.path) ||
+          entry.path === CONTENT_MANIFEST_PATH),
     );
-    await mapLimit(records, 8, async (entry) => {
+    const loaded = await mapLimit(records, 8, async (entry) => {
       const path = entry.path!;
       if (!entry.sha) throw new Error(`missing_blob_sha:${path}`);
       const blob = await requestJson<GitHubBlob>(
@@ -162,24 +222,225 @@ export class GitHubRepositoryClient {
         throw new Error(`invalid_content_record:${path}`);
       }
       const text = new TextDecoder().decode(decodeBase64(blob.content.replace(/\s/g, '')));
+      if (path === CONTENT_MANIFEST_PATH) {
+        const manifest = parseRecord(text, ContentManifestV2Schema, path);
+        return {
+          schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+          kind: 'manifest',
+          record: manifest,
+        } as const;
+      }
+      if (CONTAINER_PATH_PATTERN.test(path)) {
+        const container = parseRecord(text, CardContainerRecordV2Schema, path);
+        if (containerStoragePath(container.id) !== path) {
+          throw new Error(`record_path_mismatch:${path}`);
+        }
+        return {
+          schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+          kind: 'container',
+          record: container,
+        } as const;
+      }
       if (PAGE_PATH_PATTERN.test(path)) {
-        const page = parseRecord(text, PageRecordSchema, path);
+        const value = parseJsonRecord(text, path);
+        if (isSchemaVersionV2(value)) {
+          const page = parseValueRecord(value, PageRecordV2Schema, path);
+          if (pageStoragePath(page.id) !== path) throw new Error(`record_path_mismatch:${path}`);
+          return { schemaVersion: CONTENT_SCHEMA_VERSION_V2, kind: 'page', record: page } as const;
+        }
+        const page = parseValueRecord(value, PageRecordSchema, path);
         if (pageStoragePath(page.id) !== path) throw new Error(`record_path_mismatch:${path}`);
-        pages.push(page);
-      } else {
-        const card = parseRecord(text, CardRecordSchema, path);
+        return { schemaVersion: SCHEMA_VERSION, kind: 'page', record: page } as const;
+      }
+      const value = parseJsonRecord(text, path);
+      if (isSchemaVersionV2(value)) {
+        const card = parseValueRecord(value, CardRecordV2Schema, path);
         if (cardStoragePath(card.id) !== path) throw new Error(`record_path_mismatch:${path}`);
-        cards.push(card);
+        return { schemaVersion: CONTENT_SCHEMA_VERSION_V2, kind: 'card', record: card } as const;
+      } else {
+        const card = parseValueRecord(value, CardRecordSchema, path);
+        if (cardStoragePath(card.id) !== path) throw new Error(`record_path_mismatch:${path}`);
+        return { schemaVersion: SCHEMA_VERSION, kind: 'card', record: card } as const;
       }
     });
-    parseContentRecords(pages, cards);
+
+    const versions = new Set(loaded.map((entry) => entry.schemaVersion));
+    if (versions.size > 1) throw new Error('mixed_content_schema_versions');
+
+    const schemaVersion = versions.values().next().value ?? SCHEMA_VERSION;
+    const pagesV1: PageRecord[] = [];
+    const cardsV1: CardRecord[] = [];
+    const pagesV2: PageRecordV2[] = [];
+    const containersV2: CardContainerRecordV2[] = [];
+    const cardsV2: CardRecordV2[] = [];
+    for (const entry of loaded) {
+      if (entry.schemaVersion === CONTENT_SCHEMA_VERSION_V2) {
+        if (entry.kind === 'page') pagesV2.push(entry.record);
+        else if (entry.kind === 'container') containersV2.push(entry.record);
+        else if (entry.kind === 'card') cardsV2.push(entry.record);
+      } else if (entry.kind === 'page') {
+        pagesV1.push(entry.record);
+      } else {
+        cardsV1.push(entry.record);
+      }
+    }
+
+    if (schemaVersion === CONTENT_SCHEMA_VERSION_V2) {
+      parseContentRecordsV2(pagesV2, containersV2, cardsV2);
+      return {
+        schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+        sourceCommit,
+        pages: pagesV2,
+        containers: containersV2,
+        cards: cardsV2,
+        repository: { owner: OWNER, name: REPOSITORY, branch: BRANCH },
+      };
+    }
+    parseContentRecords(pagesV1, cardsV1);
     return {
+      schemaVersion: SCHEMA_VERSION,
       sourceCommit,
-      pages,
-      cards,
+      pages: pagesV1,
+      cards: cardsV1,
       repository: { owner: OWNER, name: REPOSITORY, branch: BRANCH },
     };
   }
+
+  async publishV2Snapshot(
+    value: unknown,
+    expectedHead: string,
+    message = 'Update documentation content',
+  ): Promise<{ commitSha: string }> {
+    if (!COMMIT_SHA_PATTERN.test(expectedHead)) throw new Error('repository_expected_head_invalid');
+    if (!message.trim() || message.length > 200)
+      throw new Error('repository_commit_message_invalid');
+
+    const parsed = ContentRecordsV2Schema.safeParse(value);
+    if (!parsed.success) throw new Error('invalid_content_relationships');
+    const records = recordFiles(parsed.data);
+    if ((await this.getHead()) !== expectedHead) throw new Error('repository_head_changed');
+
+    const parent = await requestJson<GitHubCommit>(
+      this.request,
+      `${REPOSITORY_PATH}/git/commits/${expectedHead}`,
+    );
+    const baseTreeSha = parent.tree?.sha ?? parent.commit?.tree?.sha;
+    if (!baseTreeSha || !COMMIT_SHA_PATTERN.test(baseTreeSha)) {
+      throw new Error('github_invalid_response');
+    }
+    const baseTree = await requestJson<GitHubTree>(
+      this.request,
+      `${REPOSITORY_PATH}/git/trees/${baseTreeSha}?recursive=1`,
+    );
+    if (baseTree.truncated) throw new Error('repository_tree_exceeds_supported_limit');
+    if (!Array.isArray(baseTree.tree)) throw new Error('github_invalid_response');
+
+    const desiredPaths = new Set(records.map((entry) => entry.path));
+    const removedPaths = baseTree.tree
+      .filter(
+        (entry) =>
+          entry.type === 'blob' &&
+          typeof entry.path === 'string' &&
+          (PAGE_PATH_PATTERN.test(entry.path) ||
+            CARD_PATH_PATTERN.test(entry.path) ||
+            CONTAINER_PATH_PATTERN.test(entry.path)) &&
+          !desiredPaths.has(entry.path),
+      )
+      .map((entry) => entry.path!);
+    const blobs = await mapLimit(records, 8, async ({ path, record }) => {
+      const result = await requestJson<GitHubBlobResponse>(
+        this.request,
+        `${REPOSITORY_PATH}/git/blobs`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: JSON.stringify(record, null, 2) + '\n',
+            encoding: 'utf-8',
+          }),
+        },
+      );
+      if (!result.sha || !COMMIT_SHA_PATTERN.test(result.sha)) {
+        throw new Error(`github_invalid_response:${path}`);
+      }
+      return { path, mode: '100644', type: 'blob', sha: result.sha };
+    });
+    const treeEntries = [
+      ...blobs,
+      ...removedPaths.map((path) => ({
+        path,
+        mode: '100644',
+        type: 'blob',
+        sha: null,
+      })),
+    ];
+    const tree = await requestJson<GitHubTreeResponse>(
+      this.request,
+      `${REPOSITORY_PATH}/git/trees`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries }),
+      },
+    );
+    if (!tree.sha || !COMMIT_SHA_PATTERN.test(tree.sha)) {
+      throw new Error('github_invalid_response');
+    }
+    const commit = await requestJson<GitHubCommitResponse>(
+      this.request,
+      `${REPOSITORY_PATH}/git/commits`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: message.trim(),
+          tree: tree.sha,
+          parents: [expectedHead],
+        }),
+      },
+    );
+    if (!commit.sha || !COMMIT_SHA_PATTERN.test(commit.sha)) {
+      throw new Error('github_invalid_response');
+    }
+    if ((await this.getHead()) !== expectedHead) throw new Error('repository_head_changed');
+
+    const updatedRef = await requestJson<GitHubRefResponse>(
+      this.request,
+      `${REPOSITORY_PATH}/git/refs/heads/${BRANCH}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sha: commit.sha, force: false }),
+      },
+    );
+    if (updatedRef.object?.sha !== commit.sha) throw new Error('github_invalid_response');
+    return { commitSha: commit.sha };
+  }
+}
+
+function parseJsonRecord(text: string, expectedPath: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`invalid_content_record:${expectedPath}`);
+  }
+}
+
+function isSchemaVersionV2(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'schemaVersion' in value &&
+    value.schemaVersion === CONTENT_SCHEMA_VERSION_V2
+  );
+}
+
+function parseValueRecord<T>(value: unknown, schema: SafeParser<T>, expectedPath: string): T {
+  const result = schema.safeParse(value);
+  if (!result.success || result.data === undefined) {
+    throw new Error(`invalid_content_record:${expectedPath}`);
+  }
+  return result.data;
 }
 
 export function createGitHubRepositoryClient(request: RequestGithub): GitHubRepositoryClient {

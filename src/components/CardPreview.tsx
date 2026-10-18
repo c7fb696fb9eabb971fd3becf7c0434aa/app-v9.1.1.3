@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { ActionToolbar, type ToolbarAction } from './ActionToolbar';
 import { Icon, type IconName } from './Icon';
 import { Button } from './Primitives';
@@ -57,6 +57,8 @@ export function CardPreview({
   contentLabel,
   title,
   category,
+  description,
+  carousel,
   titleIcon,
   actions,
   toolbarLabel,
@@ -68,6 +70,8 @@ export function CardPreview({
   contentLabel: string;
   title: string;
   category: string;
+  description?: string;
+  carousel?: ReactNode;
   titleIcon: IconName;
   actions: readonly ToolbarAction[];
   toolbarLabel: string;
@@ -100,6 +104,12 @@ export function CardPreview({
           </div>
           <span>{category}</span>
         </header>
+        {(description || carousel) && (
+          <div className="backend-card-editor-content-body">
+            {description && <p className="backend-card-editor-description">{description}</p>}
+            {carousel}
+          </div>
+        )}
       </section>
       <ActionToolbar
         actions={actions}
