@@ -428,7 +428,7 @@ describe('BackendPage', () => {
     expect(readSnapshot).toHaveBeenCalledTimes(2);
   });
 
-  it('tests a PAT, enables Save & Connect, and starts an authenticated repository session', async () => {
+  it('saves a PAT directly and starts an authenticated repository session', async () => {
     render(
       <MemoryRouter>
         <BackendPage />
@@ -442,18 +442,13 @@ describe('BackendPage', () => {
       screen.getByRole('dialog', { name: 'GitHub Repository Sync Settings' }),
     ).toBeInTheDocument();
     const tokenInput = screen.getByLabelText('GitHub Personal Access Token (PAT)');
-    const testButton = screen.getByRole('button', { name: 'Connection Test' });
     const saveButton = screen.getByRole('button', { name: 'Save & Connect' });
     expect(saveButton).toBeDisabled();
     fireEvent.change(tokenInput, { target: { value: 'temporary-test-token' } });
-    fireEvent.click(testButton);
-    expect(verifyGitHubPat).toHaveBeenCalledWith('temporary-test-token');
-    expect(
-      await screen.findByText('Connection verified. Save & Connect to start the GitHub session.'),
-    ).toBeInTheDocument();
     expect(saveButton).toBeEnabled();
     fireEvent.click(saveButton);
     expect(loginWithPat).toHaveBeenCalledWith('temporary-test-token');
+    expect(verifyGitHubPat).not.toHaveBeenCalled();
     await screen.findByRole('form', { name: 'Selected record editor' });
     expect(
       screen.queryByRole('dialog', { name: 'GitHub Repository Sync Settings' }),
@@ -487,7 +482,7 @@ describe('BackendPage', () => {
       'password',
     );
     expect(screen.getByRole('region', { name: 'Connection Test Results' })).toHaveTextContent(
-      'Connection status and branch details will appear here after a test.',
+      'Save & Connect verifies access and starts your session. Connection Test checks access without saving.',
     );
     expect(firstPanel.querySelector('.backend-workspace-panel-layout')).toHaveAttribute('inert');
     expect(secondPanel).not.toHaveAttribute('inert');

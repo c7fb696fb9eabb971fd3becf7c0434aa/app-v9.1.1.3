@@ -81,14 +81,12 @@ export function GitHubSyncDialog({
   }>;
 }) {
   const [token, setToken] = useState('');
-  const [testedToken, setTestedToken] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState(copy.resultsMessage);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   function handleTokenChange(event: ChangeEvent<HTMLInputElement>) {
     setToken(event.currentTarget.value);
-    setTestedToken(null);
     setResultMessage(copy.resultsMessage);
   }
 
@@ -96,11 +94,9 @@ export function GitHubSyncDialog({
     const candidate = token.trim();
     if (!candidate || isTesting || isSaving) return;
     setIsTesting(true);
-    setTestedToken(null);
     setResultMessage(copy.resultsMessage);
     try {
       await onTest(candidate);
-      setTestedToken(candidate);
       setResultMessage(copy.testSuccessMessage);
     } catch (cause) {
       setResultMessage(connectionErrorMessage(cause, copy.testFailureMessage));
@@ -111,7 +107,7 @@ export function GitHubSyncDialog({
 
   async function saveConnection() {
     const candidate = token.trim();
-    if (!candidate || testedToken !== candidate || isTesting || isSaving || !onSave) return;
+    if (!candidate || isTesting || isSaving || !onSave) return;
     setIsSaving(true);
     try {
       await onSave(candidate);
@@ -202,9 +198,7 @@ export function GitHubSyncDialog({
         </Button>
         <Button
           type="button"
-          disabled={
-            saveDisabled || !onSave || testedToken !== token.trim() || isTesting || isSaving
-          }
+          disabled={saveDisabled || !onSave || !token.trim() || isTesting || isSaving}
           onClick={() => void saveConnection()}
         >
           {isSaving ? 'Connecting…' : copy.saveLabel}

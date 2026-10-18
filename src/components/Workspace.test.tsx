@@ -97,7 +97,7 @@ describe('reusable workspace components', () => {
     expect(screen.getByRole('button', { name: 'Open dialog' })).toHaveFocus();
   });
 
-  it('requires a successful connection test before saving the entered token', async () => {
+  it('allows saving a non-empty token without requiring a separate connection test', async () => {
     const onTest = vi.fn();
     const onSave = vi.fn();
     render(
@@ -132,17 +132,15 @@ describe('reusable workspace components', () => {
     expect(screen.getByLabelText('Repository')).toHaveValue('manuals');
     expect(screen.getByLabelText('Target branch')).toHaveValue('docs');
     fireEvent.change(screen.getByLabelText('Access key'), { target: { value: 'temporary' } });
-    expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Check access' }));
-    expect(await screen.findByText('Connection passed.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
-    expect(onTest).toHaveBeenCalledWith('temporary');
     expect(onSave).toHaveBeenCalledWith('temporary');
+    expect(onTest).not.toHaveBeenCalled();
   });
 
-  it('keeps saving disabled when a connection test fails or the token changes', async () => {
+  it('allows saving after a failed connection test and shows save failures', async () => {
     const onTest = vi.fn().mockRejectedValue(new Error('github_token_invalid'));
+    const onSave = vi.fn().mockRejectedValue(new Error('github_permission_denied'));
     render(
       <GitHubSyncDialog
         id="sync-failure"
@@ -166,7 +164,7 @@ describe('reusable workspace components', () => {
         }}
         onClose={() => undefined}
         onTest={onTest}
-        onSave={() => undefined}
+        onSave={onSave}
       />,
     );
 
@@ -175,14 +173,20 @@ describe('reusable workspace components', () => {
     expect(
       await screen.findByText('GitHub rejected this token. Check it and try again.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(onSave).toHaveBeenCalledWith('invalid');
+    expect(
+      await screen.findByText('This token cannot access the configured repository.'),
+    ).toBeInTheDocument();
 
     onTest.mockResolvedValue(undefined);
+    onSave.mockResolvedValue(undefined);
     fireEvent.change(screen.getByLabelText('Access key'), { target: { value: 'valid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check access' }));
     expect(await screen.findByText('Connection passed.')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Access key'), { target: { value: 'changed' } });
-    expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
   });
 
   it('renders toolbar and card preview from supplied action and content data', () => {
