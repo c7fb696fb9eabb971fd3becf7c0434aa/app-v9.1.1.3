@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "84654df0-3e28-46d4-8c16-1f311fe05dc2",
+  "containerId": "b139da74-67d4-46d7-8c44-8a8c4f30d91a",
+  "order": 0,
+  "title": "E2E Card Alpha",
+  "tag": "E2E",
+  "definition": "Temporary card content for live verification.",
+  "keyRule": "Keep test content temporary.",
+  "code": "const e2e = true;",
+  "spec": "Verify field persistence and preview rendering.",
+  "attachments": []
+}

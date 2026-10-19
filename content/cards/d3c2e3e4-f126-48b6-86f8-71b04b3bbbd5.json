@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "id": "d3c2e3e4-f126-48b6-86f8-71b04b3bbbd5",
+  "containerId": "b139da74-67d4-46d7-8c44-8a8c4f30d91a",
+  "order": 1,
+  "title": "E2E Card Beta",
+  "tag": "E2E Beta",
+  "definition": "Second temporary card used to verify live carousel selection.",
+  "attachments": [
+    {
+      "id": "32a18780-a26d-4952-ac6b-73ac5490c7b3",
+      "kind": "pdf",
+      "label": "Temporary PDF attachment check",
+      "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      "mimeType": "application/pdf"
+    }
+  ]
+}
