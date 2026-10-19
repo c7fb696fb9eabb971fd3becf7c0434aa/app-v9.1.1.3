@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   CardContainerRecordV2Schema,
+  AttachmentSchema,
   CONTENT_SCHEMA_VERSION_V2,
   ContentRecordsV2Schema,
   containerStoragePath,
-  migrateV1ContentRecords,
   type ContentRecordsV2,
 } from './content';
 
@@ -39,42 +39,6 @@ function validV2Records(): ContentRecordsV2 {
     ],
     containers: [validContainer()],
     cards: [],
-  };
-}
-
-function validV1Records() {
-  return {
-    schemaVersion: 1,
-    pages: [
-      {
-        schemaVersion: 1,
-        id: pageId,
-        title: 'Platform',
-        slug: 'platform',
-        parentId: null,
-        order: 0,
-      },
-      {
-        schemaVersion: 1,
-        id: nestedPageId,
-        title: 'Operations',
-        slug: 'operations',
-        parentId: pageId,
-        order: 0,
-      },
-    ],
-    cards: [
-      {
-        schemaVersion: 1,
-        id: cardId,
-        pageId: nestedPageId,
-        order: 0,
-        title: 'Deployments',
-        tag: 'CI/CD',
-        definition: 'Deployment workflows.',
-        attachments: [],
-      },
-    ],
   };
 }
 
@@ -143,52 +107,50 @@ describe('container-based content schema', () => {
     expect(containerStoragePath(containerId)).toBe(`content/containers/${containerId}.json`);
   });
 
-  it('migrates legacy page cards into one stable-ID container per page', () => {
-    let nextContainer = 0;
-    const migrated = migrateV1ContentRecords(validV1Records(), () => {
-      nextContainer += 1;
-      return nextContainer === 1 ? containerId : '55555555-5555-4555-8555-555555555555';
-    });
-
-    expect(migrated.pages.map(({ id, parentId }) => ({ id, parentId }))).toEqual([
-      { id: pageId, parentId: null },
-      { id: nestedPageId, parentId: pageId },
-    ]);
-    expect(migrated.containers).toEqual([
-      {
-        schemaVersion: CONTENT_SCHEMA_VERSION_V2,
-        id: containerId,
-        pageId,
-        title: 'Cards',
-        order: 0,
-      },
-      {
-        schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+  it('accepts format-aware remote media URLs while keeping external links separate', () => {
+    expect(
+      AttachmentSchema.safeParse({
         id: '55555555-5555-4555-8555-555555555555',
-        pageId: nestedPageId,
-        title: 'Cards',
-        order: 0,
-      },
-    ]);
-    expect(migrated.cards[0]).toMatchObject({
-      schemaVersion: CONTENT_SCHEMA_VERSION_V2,
-      id: cardId,
-      containerId: '55555555-5555-4555-8555-555555555555',
-      order: 0,
-      title: 'Deployments',
-      tag: 'CI/CD',
-      definition: 'Deployment workflows.',
-      attachments: [],
-    });
-    expect(ContentRecordsV2Schema.safeParse(migrated).success).toBe(true);
-  });
-
-  it('rejects malformed legacy data and colliding generated container IDs', () => {
-    expect(() => migrateV1ContentRecords({ schemaVersion: 1 }, () => containerId)).toThrow(
-      'legacy_content_invalid',
-    );
-    expect(() => migrateV1ContentRecords(validV1Records(), () => pageId)).toThrow(
-      'migration_container_id_invalid',
-    );
+        kind: 'audio',
+        label: 'Release audio',
+        url: 'https://cdn.example.test/release.ogg',
+        mimeType: 'audio/ogg',
+      }).success,
+    ).toBe(true);
+    expect(
+      AttachmentSchema.safeParse({
+        id: '66666666-6666-4666-8666-666666666666',
+        kind: 'link',
+        label: 'Reference',
+        url: 'https://example.test/reference',
+      }).success,
+    ).toBe(true);
+    expect(
+      AttachmentSchema.safeParse({
+        id: '77777777-7777-4777-8777-777777777777',
+        kind: 'audio',
+        label: 'Invalid audio',
+        url: 'javascript:alert(1)',
+        mimeType: 'audio/ogg',
+      }).success,
+    ).toBe(false);
+    expect(
+      AttachmentSchema.safeParse({
+        id: '99999999-9999-4999-8999-999999999999',
+        kind: 'audio',
+        label: 'Insecure media',
+        url: 'http://cdn.example.test/release.ogg',
+        mimeType: 'audio/ogg',
+      }).success,
+    ).toBe(false);
+    expect(
+      AttachmentSchema.safeParse({
+        id: '88888888-8888-4888-8888-888888888888',
+        kind: 'audio',
+        label: 'Mismatched format',
+        url: 'https://example.test/release.mp3',
+        mimeType: 'video/mp4',
+      }).success,
+    ).toBe(false);
   });
 });

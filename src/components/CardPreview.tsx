@@ -2,6 +2,97 @@ import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { ActionToolbar, type ToolbarAction } from './ActionToolbar';
 import { Icon, type IconName } from './Icon';
 import { Button } from './Primitives';
+import { assetExtensionForMimeType, type Attachment } from '../lib/content';
+
+function mediaUrl(
+  repository: { owner: string; name: string; branch: string },
+  assetId: string,
+  mimeType: Extract<Attachment, { assetId: string }>['mimeType'],
+): string {
+  return `https://raw.githubusercontent.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/${repository.branch
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}/content/media/${assetId}.${assetExtensionForMimeType(mimeType)}`;
+}
+
+export function CardAttachments({
+  attachments,
+  repository,
+  previewUrlForAsset,
+}: {
+  attachments: readonly Attachment[];
+  repository?: { owner: string; name: string; branch: string } | undefined;
+  previewUrlForAsset?: ((assetId: string) => string | undefined) | undefined;
+}) {
+  if (attachments.length === 0) return null;
+
+  return (
+    <ul className="published-attachments">
+      {attachments.map((attachment) => {
+        if (attachment.kind === 'link') {
+          return (
+            <li key={attachment.id}>
+              <a href={attachment.url} target="_blank" rel="noreferrer">
+                {attachment.label}
+              </a>
+            </li>
+          );
+        }
+        let src: string;
+        if ('url' in attachment) {
+          src = attachment.url;
+        } else {
+          const previewUrl = previewUrlForAsset?.(attachment.assetId);
+          if (previewUrl) src = previewUrl;
+          else if (repository) {
+            src = mediaUrl(repository, attachment.assetId, attachment.mimeType);
+          } else throw new Error('attachment_repository_missing');
+        }
+        if (attachment.kind === 'image') {
+          return (
+            <li key={attachment.id}>
+              <a href={src} target="_blank" rel="noreferrer">
+                <img src={src} alt={attachment.label} loading="lazy" />
+                <span>{attachment.label}</span>
+              </a>
+            </li>
+          );
+        }
+        if (attachment.kind === 'audio') {
+          return (
+            <li key={attachment.id}>
+              <div>
+                <p>{attachment.label}</p>
+                <audio controls preload="none">
+                  <source src={src} type={attachment.mimeType} />
+                </audio>
+              </div>
+            </li>
+          );
+        }
+        if (attachment.kind === 'video') {
+          return (
+            <li key={attachment.id}>
+              <div>
+                <p>{attachment.label}</p>
+                <video controls preload="none">
+                  <source src={src} type={attachment.mimeType} />
+                </video>
+              </div>
+            </li>
+          );
+        }
+        return (
+          <li key={attachment.id}>
+            <a href={src} target="_blank" rel="noreferrer">
+              {attachment.label} (PDF)
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export function CardConnector({ className }: { className: string }) {
   return <div className={className} aria-hidden="true" />;
@@ -58,6 +149,12 @@ export function CardPreview({
   title,
   category,
   description,
+  keyRule,
+  code,
+  spec,
+  attachments = [],
+  repository,
+  previewUrlForAsset,
   carousel,
   titleIcon,
   actions,
@@ -71,6 +168,12 @@ export function CardPreview({
   title: string;
   category: string;
   description?: string;
+  keyRule?: string;
+  code?: string;
+  spec?: string;
+  attachments?: readonly Attachment[];
+  repository?: { owner: string; name: string; branch: string } | undefined;
+  previewUrlForAsset?: ((assetId: string) => string | undefined) | undefined;
   carousel?: ReactNode;
   titleIcon: IconName;
   actions: readonly ToolbarAction[];
@@ -104,9 +207,26 @@ export function CardPreview({
           </div>
           <span>{category}</span>
         </header>
-        {(description || carousel) && (
+        {(description || keyRule || code || spec || attachments.length > 0 || carousel) && (
           <div className="backend-card-editor-content-body">
             {description && <p className="backend-card-editor-description">{description}</p>}
+            {keyRule && (
+              <section className="backend-card-editor-key-rule">
+                <h4>Key rule</h4>
+                <p>{keyRule}</p>
+              </section>
+            )}
+            {code && <pre className="published-card-code">{code}</pre>}
+            {spec && (
+              <p className="published-card-spec">
+                <strong>Specification:</strong> {spec}
+              </p>
+            )}
+            <CardAttachments
+              attachments={attachments}
+              repository={repository}
+              previewUrlForAsset={previewUrlForAsset}
+            />
             {carousel}
           </div>
         )}

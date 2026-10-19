@@ -1107,6 +1107,12 @@ input:focus-visible {
   color: var(--text-muted);
   font-size: 11px;
 }
+.backend-editor-identity-fields {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
 .backend-editor-field {
   display: grid;
   min-width: 0;
@@ -1115,7 +1121,8 @@ input:focus-visible {
   font-size: 11px;
 }
 .backend-editor-field input,
-.backend-editor-field textarea {
+.backend-editor-field textarea,
+.backend-editor-field select {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--line);
@@ -1130,6 +1137,13 @@ input:focus-visible {
   min-height: 140px;
   resize: vertical;
 }
+.backend-editor-field textarea.backend-editor-field-textarea-compact {
+  min-height: 76px;
+}
+.backend-editor-field textarea.backend-editor-field-textarea-code {
+  min-height: 110px;
+  font-family: ui-monospace, monospace;
+}
 .backend-editor-field-hint {
   color: var(--text-muted);
   font-size: 10px;
@@ -1140,7 +1154,8 @@ input:focus-visible {
   opacity: 0.7;
 }
 .backend-editor-field input:focus-visible,
-.backend-editor-field textarea:focus-visible {
+.backend-editor-field textarea:focus-visible,
+.backend-editor-field select:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -1815,6 +1830,64 @@ input:focus-visible {
   min-height: 0;
   flex-direction: column;
   gap: 8px;
+}
+.backend-attachment-editor {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--canvas);
+}
+.backend-attachment-editor h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.backend-attachment-carousel,
+.backend-attachment-add {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+.backend-attachment-carousel-controls,
+.backend-attachment-indicators {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+}
+.backend-attachment-carousel-controls {
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.backend-attachment-carousel-controls .action-button,
+.backend-attachment-carousel > .action-button,
+.backend-attachment-add > .action-button,
+.backend-attachment-indicators .action-button {
+  width: auto;
+  min-height: 28px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.backend-attachment-indicators .action-button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+.backend-attachment-kind {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.backend-attachment-add {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 .backend-card-carousel {
   display: flex;

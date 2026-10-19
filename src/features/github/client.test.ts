@@ -26,7 +26,14 @@ function emptyRepositoryRequest() {
 
 type RequestGithub = (path: string, init?: RequestInit) => Promise<Response>;
 
-function repositoryRequest(records: { path: string; value: unknown }[]) {
+function repositoryRequest(
+  sourceRecords: { path: string; value: unknown }[],
+  includeManifest = true,
+) {
+  const records =
+    includeManifest && !sourceRecords.some(({ path }) => path === 'content/manifest.json')
+      ? [{ path: 'content/manifest.json', value: { schemaVersion: 2 } }, ...sourceRecords]
+      : sourceRecords;
   const request = vi
     .fn<RequestGithub>()
     .mockResolvedValueOnce(jsonResponse({ object: { sha: commitSha } }))
@@ -57,9 +64,10 @@ describe('GitHub repository client', () => {
     const client = createGitHubRepositoryClient(request);
 
     await expect(client.readSnapshot()).resolves.toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       sourceCommit: commitSha,
       pages: [],
+      containers: [],
       cards: [],
       repository: { owner, name: repository, branch: 'main' },
     });
@@ -134,7 +142,7 @@ describe('GitHub repository client', () => {
     });
   });
 
-  it('continues to read schema-v1 page and card records', async () => {
+  it('rejects schema-v1 records instead of adapting legacy content', async () => {
     const records = [
       {
         path: `content/pages/${pageId}.json`,
@@ -160,46 +168,33 @@ describe('GitHub repository client', () => {
         },
       },
     ];
-    const request = repositoryRequest(records);
-
-    await expect(createGitHubRepositoryClient(request).readSnapshot()).resolves.toEqual({
-      schemaVersion: 1,
-      sourceCommit: commitSha,
-      pages: [records[0]!.value],
-      cards: [records[1]!.value],
-      repository: { owner, name: repository, branch: 'main' },
-    });
-  });
-
-  it('rejects repositories that mix schema versions', async () => {
-    const request = repositoryRequest([
-      {
-        path: `content/pages/${pageId}.json`,
-        value: {
-          schemaVersion: 1,
-          id: pageId,
-          title: 'Platform',
-          slug: 'platform',
-          parentId: null,
-          order: 0,
-        },
-      },
-      {
-        path: `content/cards/${cardId}.json`,
-        value: {
-          schemaVersion: 2,
-          id: cardId,
-          containerId,
-          order: 0,
-          title: 'Install',
-          definition: 'Install the application.',
-          attachments: [],
-        },
-      },
-    ]);
+    const request = repositoryRequest(records, false);
 
     await expect(createGitHubRepositoryClient(request).readSnapshot()).rejects.toThrow(
-      'mixed_content_schema_versions',
+      'unsupported_content_schema_version',
+    );
+  });
+
+  it('requires the v2 manifest once repository content exists', async () => {
+    const request = repositoryRequest(
+      [
+        {
+          path: `content/pages/${pageId}.json`,
+          value: {
+            schemaVersion: 2,
+            id: pageId,
+            title: 'Platform',
+            slug: 'platform',
+            parentId: null,
+            order: 0,
+          },
+        },
+      ],
+      false,
+    );
+
+    await expect(createGitHubRepositoryClient(request).readSnapshot()).rejects.toThrow(
+      'content_manifest_missing',
     );
   });
 
@@ -304,6 +299,128 @@ describe('GitHub repository client', () => {
     });
     const refBody = JSON.parse(String(calls[9]?.[1]?.body));
     expect(refBody).toEqual({ sha: newCommitSha, force: false });
+  });
+
+  it('identifies the denied GitHub write operation without exposing request data', async () => {
+    const request = vi
+      .fn<RequestGithub>()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: commitSha } }))
+      .mockResolvedValueOnce(jsonResponse({ tree: { sha: treeSha } }))
+      .mockResolvedValueOnce(jsonResponse({ tree: [] }))
+      .mockResolvedValueOnce(jsonResponse({ message: 'Resource not accessible' }, 403));
+
+    await expect(
+      createGitHubRepositoryClient(request).publishV2Snapshot(
+        { schemaVersion: 2, pages: [], containers: [], cards: [] },
+        commitSha,
+      ),
+    ).rejects.toThrow('github_permission_denied: create-blob (HTTP 403)');
+    expect(request.mock.calls.at(-1)?.[0]).toBe(`/repos/${owner}/${repository}/git/blobs`);
+  });
+
+  it('publishes uploaded media blobs with their card metadata in the same atomic tree', async () => {
+    const assetId = '44444444-4444-4444-8444-444444444444';
+    const attachmentId = '55555555-5555-4555-8555-555555555555';
+    const mediaPath = `content/media/${assetId}.mp3`;
+    const newCommitSha = 'c'.repeat(40);
+    const request = vi
+      .fn<RequestGithub>()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: commitSha } }))
+      .mockResolvedValueOnce(jsonResponse({ tree: { sha: treeSha } }))
+      .mockResolvedValueOnce(jsonResponse({ tree: [] }))
+      .mockResolvedValueOnce(jsonResponse({ sha: '1'.repeat(40) }))
+      .mockResolvedValueOnce(jsonResponse({ sha: '2'.repeat(40) }))
+      .mockResolvedValueOnce(jsonResponse({ sha: '3'.repeat(40) }))
+      .mockResolvedValueOnce(jsonResponse({ sha: '4'.repeat(40) }))
+      .mockResolvedValueOnce(jsonResponse({ sha: '5'.repeat(40) }))
+      .mockResolvedValueOnce(jsonResponse({ sha: '6'.repeat(40) }))
+      .mockResolvedValueOnce(jsonResponse({ sha: newCommitSha }))
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: commitSha } }))
+      .mockResolvedValueOnce(
+        jsonResponse({ ref: 'refs/heads/main', object: { sha: newCommitSha } }),
+      );
+    const content = {
+      schemaVersion: 2,
+      pages: [
+        {
+          schemaVersion: 2,
+          id: pageId,
+          title: 'Platform',
+          slug: 'platform',
+          parentId: null,
+          order: 0,
+        },
+      ],
+      containers: [
+        {
+          schemaVersion: 2,
+          id: containerId,
+          pageId,
+          title: 'Guides',
+          order: 0,
+        },
+      ],
+      cards: [
+        {
+          schemaVersion: 2,
+          id: cardId,
+          containerId,
+          order: 0,
+          title: 'Install',
+          definition: 'Install the application.',
+          attachments: [
+            {
+              id: attachmentId,
+              assetId,
+              kind: 'audio',
+              label: 'Release recording',
+              mimeType: 'audio/mpeg',
+              sizeBytes: 3,
+            },
+          ],
+        },
+      ],
+    };
+    const mediaUpload = {
+      assetId,
+      mimeType: 'audio/mpeg' as const,
+      sizeBytes: 3,
+      contentBase64: 'AQID',
+    };
+    const client = createGitHubRepositoryClient(request);
+
+    await expect(
+      client.publishV2Snapshot(content, commitSha, undefined, [
+        { ...mediaUpload, assetId: '99999999-9999-4999-8999-999999999999' },
+      ]),
+    ).rejects.toThrow('invalid_media_asset');
+    expect(request).not.toHaveBeenCalled();
+
+    await expect(
+      client.publishV2Snapshot(content, commitSha, undefined, [mediaUpload]),
+    ).resolves.toEqual({ commitSha: newCommitSha });
+
+    const calls = request.mock.calls;
+    const mediaBlobCall = calls.find(
+      ([path, init]) => path.endsWith('/git/blobs') && String(init?.body).includes('AQID'),
+    );
+    expect(JSON.parse(String(mediaBlobCall?.[1]?.body))).toEqual({
+      content: 'AQID',
+      encoding: 'base64',
+    });
+    const treeCall = calls.find(([path]) => path.endsWith('/git/trees'));
+    const treeBody = JSON.parse(String(treeCall?.[1]?.body));
+    expect(treeBody.tree).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: mediaPath, type: 'blob', mode: '100644' }),
+        expect.objectContaining({
+          path: `content/cards/${cardId}.json`,
+          type: 'blob',
+          mode: '100644',
+        }),
+      ]),
+    );
+    expect(calls.at(-1)?.[1]?.method).toBe('PATCH');
   });
 
   it('refuses stale snapshots before creating any repository objects', async () => {

@@ -39,7 +39,7 @@ source-control history, and static hosting. The application has no server-side A
 - The application has no server-side API or external database. Introducing either is a
   product/architecture change, not an assumption agents may make.
 
-## Current implementation (verified 2026-10-17)
+## Current implementation (verified 2026-10-18)
 
 ### Available in the application
 
@@ -48,32 +48,38 @@ source-control history, and static hosting. The application has no server-side A
   repository, and stores the PAT in tab-scoped session storage. The app revalidates it with GitHub
   after refresh; sign-out and invalid credentials clear it.
 - The protected `/home` route reads the repository's Git ref, commit, tree, and relevant blobs;
-  validates schema-v1 or schema-v2 records; and renders page hierarchy with independently
-  swappable container cards and supported attachments.
+  validates schema-v2 records; and renders page hierarchy with independently swappable container
+  cards and supported attachments.
 - The protected, undiscoverable `/#/backend` route renders an independent header and a two-panel
-  workspace. Its Select overlay contains a validated, read-only repository snapshot. Schema-v1
-  pages/cards are adapted to a page/nested-page/virtual-container/card tree; schema-v2 containers
-  and cards retain their persisted IDs and names. New pages and nested pages receive a default
+  workspace. Its Select overlay contains a validated, read-only repository snapshot. Persisted
+  schema-v2 pages, containers, and cards retain their IDs and names. New pages and nested pages receive a default
   container; users can add containers and cards inside a selected
   container, select items, rename them, reorder siblings, and confirm cascading deletion. Every
   tree item is rendered as a panel, and child rows use shared connector styling. Selecting a
   container drives its card preview; multi-card carousel selection stays synchronized with the
   record editor, with unsaved fields kept in page memory by record ID. Empty and single-card
-  containers have no carousel controls. Schema-v2 edits can be saved as one atomic commit after
-  full-content validation and expected-head checks; schema-v1 edits remain local until migration.
-  Unsaved tree edits and drafts reset on refresh. The backend and public page use the same
-  selection resolver and carousel controls for schema-v1 virtual containers and persisted
-  schema-v2 containers. No user-facing v1 migration workflow is implemented. See
+  containers have no carousel controls. The card editor exposes title, tag, definition, key rule,
+  code, specification, and a per-card attachment carousel; the preview reflects active-card
+  attachments in real time. Name and derived category share one row. Attachments support local
+  image, audio, video, and PDF uploads (up to 10 MiB each), typed remote media URLs, and separately
+  identified generic external links. Remote media URLs must use HTTPS and be publicly reachable;
+  audio URLs render in a native audio player. Schema-v2 edits can be saved as one atomic commit after
+  full-content validation and expected-head checks. Legacy schema-v1 records are rejected; the
+  editor has no compatibility or migration flow. An empty repository opens as an empty v2 workspace,
+  and its first successful save writes the manifest with the content. A stale-head conflict
+  stops the write and preserves the in-memory draft. Unsaved tree edits and drafts reset on refresh.
+  The backend and public page use the same
+  selection resolver and carousel controls for persisted schema-v2 containers. See
   the
   [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md) for its as-built composition.
-- The backend does not yet provide persistent drafts or a user-facing v1 migration workflow.
-  Schema-v2 records can be saved directly to the configured repository.
+- The backend does not yet provide persistent drafts. Valid schema-v2 records can be saved directly
+  to the configured repository.
 - GitHub API requests use `no-store`; repository and schema boundaries have tests.
 - GitHub Actions runs CI and deploys the static web app to GitHub Pages from `main`.
 
 ### Not established by the repository
 
-- Persistent local drafts or v1 migration tooling.
+- Persistent local drafts.
 - A staffed support process or named documentation owners.
 - A prioritized product roadmap maintained in this repository.
 

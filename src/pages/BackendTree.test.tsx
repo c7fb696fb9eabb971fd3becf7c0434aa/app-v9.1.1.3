@@ -18,11 +18,12 @@ vi.mock('../features/github', () => ({
 }));
 
 const repositorySnapshot = {
+  schemaVersion: 2 as const,
   sourceCommit: 'a'.repeat(40),
   repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
   pages: [
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '11111111-1111-4111-8111-111111111111',
       title: 'Machine Learning',
       slug: 'machine-learning',
@@ -30,7 +31,7 @@ const repositorySnapshot = {
       order: 0,
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '22222222-2222-4222-8222-222222222222',
       title: 'Neural Networks',
       slug: 'neural-networks',
@@ -38,7 +39,7 @@ const repositorySnapshot = {
       order: 0,
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '33333333-3333-4333-8333-333333333333',
       title: 'Platform Guide',
       slug: 'platform-guide',
@@ -46,29 +47,52 @@ const repositorySnapshot = {
       order: 1,
     },
   ],
+  containers: [
+    {
+      schemaVersion: 2 as const,
+      id: '77777777-7777-4777-8777-777777777777',
+      pageId: '11111111-1111-4111-8111-111111111111',
+      title: 'Cards',
+      order: 0,
+    },
+    {
+      schemaVersion: 2 as const,
+      id: '88888888-8888-4888-8888-888888888888',
+      pageId: '22222222-2222-4222-8222-222222222222',
+      title: 'Cards',
+      order: 0,
+    },
+    {
+      schemaVersion: 2 as const,
+      id: '99999999-9999-4999-8999-999999999999',
+      pageId: '33333333-3333-4333-8333-333333333333',
+      title: 'Cards',
+      order: 0,
+    },
+  ],
   cards: [
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '44444444-4444-4444-8444-444444444444',
-      pageId: '11111111-1111-4111-8111-111111111111',
+      containerId: '77777777-7777-4777-8777-777777777777',
       order: 0,
       title: 'Tensor Flow',
       definition: 'Tensor details.',
       attachments: [],
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '55555555-5555-4555-8555-555555555555',
-      pageId: '11111111-1111-4111-8111-111111111111',
+      containerId: '77777777-7777-4777-8777-777777777777',
       order: 1,
       title: 'Training Fundamentals',
       definition: 'Training details.',
       attachments: [],
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '66666666-6666-4666-8666-666666666666',
-      pageId: '33333333-3333-4333-8333-333333333333',
+      containerId: '99999999-9999-4999-8999-999999999999',
       order: 0,
       title: 'GitHub Actions',
       definition: 'Automation details.',

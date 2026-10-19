@@ -32,26 +32,31 @@ holds the PAT in session storage and memory while authenticated; page JavaScript
    are restricted to the GitHub API origin and the configured repository path.
 4. `src/pages/HomePage.tsx` asks the GitHub feature to read the repository snapshot, then
    renders page hierarchy with an independently selected carousel for each persisted schema-v2
-   container or schema-v1 page's virtual container. The active card's content and attachments
-   render in that page. Loading and request errors are visible.
+   container. The active card's content and attachments render in that page. Loading and request
+   errors are visible.
 5. `src/pages/BackendPage.tsx` renders the protected, independently styled `/backend`
-   route. It reads a validated v1 or v2 repository snapshot through the GitHub client. Schema-v1
-   pages/cards are adapted into a page-memory tree with a derived virtual `Cards` container for
-   each page; v2 containers retain their persisted IDs and titles. V1 virtual container IDs are
-   UI-only and are not migration IDs or repository records. New pages receive a default container;
-   cards can be created under a selected container. Items can be selected, renamed, reordered, and
-   deleted locally. A schema-v2 snapshot can be saved as one atomic Git commit from the editor;
-   schema-v1 editing remains local until the separately reviewed migration is applied. Unsaved
-   drafts are discarded on refresh. Loading, empty, read, save, and stale-head conflict states are
+   route. It reads a validated schema-v2 repository snapshot through the GitHub client. Pages,
+   containers, and cards are represented only by persisted records with stable IDs; no legacy
+   virtual containers or migration UI are used. New pages receive a default container; cards can
+   be created under a selected container. Items can be selected, renamed, reordered, and deleted
+   locally. The editor saves the complete v2 snapshot as one atomic Git commit. Card drafts can edit
+   title, tag, definition, key
+   rule, code, specification, and per-card attachments. The attachment carousel supports local
+   image/audio/video/PDF uploads and explicit typed media URLs, plus a separate generic external
+   link kind. Uploaded files are previewed locally and published as validated media blobs in the
+   same Git tree/commit as their card metadata. Backend and public previews share attachment
+   rendering, so audio URLs render as audio controls rather than generic links. Unsaved drafts are
+   discarded on refresh. Loading, empty, read, save, and stale-head conflict states are
    explicit. The
    page composes shared header, frame, panel, dialog, toolbar, and card components, with route copy
    and toolbar action definitions supplied separately. Its two-panel layout and overlay boundaries
    are mapped in the [Backend Workspace Visual Map](./BACKEND_WORKSPACE_MAP.md).
 6. `src/features/github/client.ts` reads the fixed branch/ref, commit, recursive tree, and
-   validated record blobs. Its v2 writer validates the complete result, builds one Git tree and
-   commit, rechecks the expected head, and advances the fixed branch without force.
+   validated record blobs. Its v2 writer validates the complete result and any referenced pending
+   media uploads, creates JSON and binary blobs, builds one Git tree and commit, rechecks the
+   expected head, and advances the fixed branch without force.
 7. GitHub repository history remains authoritative for committed content. Backend changes are
-   persisted only when the user saves a schema-v2 draft; schema-v1 drafts remain local.
+   persisted when the user saves a validated schema-v2 draft.
 
 ## Component and package ownership
 
@@ -77,35 +82,38 @@ that does not mean an API app currently exists.
 
 - Page, card, and attachment types, runtime validation, schema version, stable-ID storage paths,
   allowed MIME types, content limits, and hierarchy invariants live in `src/lib/content.ts`.
-- The GitHub reader, backend tree, and public renderer accept validated schema-v1 and schema-v2
-  snapshots. V1 cards remain attached to pages and are projected into UI-only virtual containers;
-  v2 pages, named containers, and cards are read from their persisted records. The explicit v1
-  migration remains pure/tested and is not automatically run. See
+- The GitHub reader, backend tree, and public renderer accept only validated schema-v2 snapshots.
+  Legacy schema-v1 page/card records fail explicitly; there are no virtual-container adapters or
+  in-app migration flows. A truly empty repository is treated as an empty v2 workspace; its first
+  successful save creates the v2 manifest together with its content. See
   [ADR 0003](./adr/0003-container-based-card-model.md).
 - `src/lib/content-resolution.ts` provides deterministic page-container ordering and shared
-  container/card preview selection for persisted v2 containers and v1 repository snapshots
-  adapted through stable virtual per-page containers. The backend and public home use the shared
-  resolver and carousel controls.
+  container/card preview selection for persisted v2 containers. The backend and public home use
+  the shared resolver and carousel controls.
 - The configured Git repository and `main` branch are centralized in `config.ts`.
+- Stored attachments use `content/media/<uuid>.<extension>`; remote media URLs must use HTTPS and
+  preserve their selected media kind and supported MIME type in the card record. Remote URLs must
+  be publicly reachable by readers; they are embedded directly rather than copied into GitHub.
+  Generic external links remain a distinct attachment kind and may use HTTP or HTTPS. Existing
+  schema-v2 records remain valid because the URL variants are additive.
 - Repository JSON is stored at `content/pages/<uuid>.json`, `content/cards/<uuid>.json`, and
   `content/containers/<uuid>.json` for v2; `content/manifest.json` marks schema v2 even when all
   content records are removed.
   attachments refer to media under `content/media/<uuid>.<mime-derived-extension>`.
 - V2 container records are read from `content/containers/<uuid>.json`. The backend writer also
-  updates `content/manifest.json`. It only
-  publishes complete validated v2 content. V1 migration is not automatic and must be separately
-  reviewed; v1 editing cannot be saved as v2 until migration has been applied.
+  writes `content/manifest.json` with the complete validated v2 content set. Empty repositories
+  without content records are accepted as empty workspaces; once records exist, a schema-v2
+  manifest is required.
 - IDs, validated records, and explicit parent relationships define identity and hierarchy. Titles
   and slugs are not file paths.
-- The backend explorer and left-side editor read validated v1 or v2 snapshots. V1 pages get a
-  derived, non-persisted virtual container; v2 containers retain persisted IDs. Unsaved fields and
-  local tree edits are isolated in page memory until saved; refresh discards unsaved changes.
-  Multi-card preview selection follows the active card; empty and single-card containers do not
-  show carousel controls. Only v2 content can currently be saved. The writer validates the entire
+- The backend explorer and left-side editor read validated v2 snapshots. Containers always have
+  persisted IDs. Unsaved fields and local tree edits are isolated in page memory until saved;
+  refresh discards unsaved changes. Multi-card preview selection follows the active card; empty
+  and single-card containers do not show carousel controls. The writer validates the entire
   snapshot, uses one Git tree and commit, rechecks the source head before a non-force ref update,
   and reports concurrent-head conflicts without silently retrying.
-- The public home uses the same resolver and carousel controls for each persisted v2 container or
-  v1 virtual per-page container, with independent selection per container.
+- The public home uses the same resolver and carousel controls for each persisted v2 container,
+  with independent selection per container.
 
 See the content model in [`src/lib/content.ts`](../src/lib/content.ts), [cache policy](./CACHE_POLICY.md),
 and [ADR 0001](./adr/0001-system-architecture.md) for domain details and rationale.
@@ -120,7 +128,7 @@ and [ADR 0001](./adr/0001-system-architecture.md) for domain details and rationa
 - Treat every repository record as untrusted until runtime schema validation succeeds.
 - Local tree edits do not mutate the repository until the user selects Save changes. The writer
   accepts only a complete validated schema-v2 content set, checks the expected branch head twice,
-  and updates the ref without force. Schema-v1 drafts cannot be saved through this path.
+  and updates the ref without force. Legacy records are rejected; no conversion is performed.
 - Do not test repository writes or deploy to production without explicit approval of the exact
   operation.
 - A successful commit, green CI run, and successful Pages deployment are separate outcomes.

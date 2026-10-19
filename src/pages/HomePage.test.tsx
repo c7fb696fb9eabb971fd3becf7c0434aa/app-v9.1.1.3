@@ -57,11 +57,12 @@ describe('HomePage', () => {
 
   it('publishes each page card set as its own resolver-backed carousel', async () => {
     readSnapshot.mockResolvedValueOnce({
+      schemaVersion: 2,
       sourceCommit: 'a'.repeat(40),
       repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
       pages: [
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: '11111111-1111-4111-8111-111111111111',
           title: 'Platform',
           slug: 'platform',
@@ -69,7 +70,7 @@ describe('HomePage', () => {
           order: 0,
         },
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: '22222222-2222-4222-8222-222222222222',
           title: 'Empty child',
           slug: 'empty-child',
@@ -77,7 +78,7 @@ describe('HomePage', () => {
           order: 0,
         },
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: '33333333-3333-4333-8333-333333333333',
           title: 'Single card',
           slug: 'single-card',
@@ -85,29 +86,52 @@ describe('HomePage', () => {
           order: 1,
         },
       ],
+      containers: [
+        {
+          schemaVersion: 2,
+          id: '77777777-7777-4777-8777-777777777777',
+          pageId: '11111111-1111-4111-8111-111111111111',
+          title: 'Platform',
+          order: 0,
+        },
+        {
+          schemaVersion: 2,
+          id: '88888888-8888-4888-8888-888888888888',
+          pageId: '22222222-2222-4222-8222-222222222222',
+          title: 'Empty child',
+          order: 0,
+        },
+        {
+          schemaVersion: 2,
+          id: '99999999-9999-4999-8999-999999999999',
+          pageId: '33333333-3333-4333-8333-333333333333',
+          title: 'Single card',
+          order: 0,
+        },
+      ],
       cards: [
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: '44444444-4444-4444-8444-444444444444',
-          pageId: '11111111-1111-4111-8111-111111111111',
+          containerId: '77777777-7777-4777-8777-777777777777',
           order: 0,
           title: 'First platform card',
           definition: 'First content.',
           attachments: [],
         },
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: '55555555-5555-4555-8555-555555555555',
-          pageId: '11111111-1111-4111-8111-111111111111',
+          containerId: '77777777-7777-4777-8777-777777777777',
           order: 1,
           title: 'Second platform card',
           definition: 'Second content.',
           attachments: [],
         },
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: '66666666-6666-4666-8666-666666666666',
-          pageId: '33333333-3333-4333-8333-333333333333',
+          containerId: '99999999-9999-4999-8999-999999999999',
           order: 0,
           title: 'Only card',
           definition: 'Single-card content.',
@@ -184,7 +208,21 @@ describe('HomePage', () => {
           order: 0,
           title: 'First guide',
           definition: 'First guide content.',
-          attachments: [],
+          attachments: [
+            {
+              id: '66666666-6666-4666-8666-666666666666',
+              kind: 'audio',
+              label: 'Guide audio',
+              url: 'https://cdn.example.test/guide.ogg',
+              mimeType: 'audio/ogg',
+            },
+            {
+              id: '77777777-7777-4777-8777-777777777777',
+              kind: 'link',
+              label: 'External reference',
+              url: 'https://example.test/reference',
+            },
+          ],
         },
         {
           schemaVersion: 2,
@@ -198,8 +236,18 @@ describe('HomePage', () => {
       ],
     });
 
-    render(<HomePage />);
+    const { container } = render(<HomePage />);
     expect(await screen.findByText('First guide content.')).toBeInTheDocument();
+    expect(container.querySelector('audio source')).toHaveAttribute(
+      'src',
+      'https://cdn.example.test/guide.ogg',
+    );
+    expect(container.querySelector('audio source')).toHaveAttribute('type', 'audio/ogg');
+    expect(container.querySelector('audio')).toHaveAttribute('controls');
+    expect(screen.getByRole('link', { name: 'External reference' })).toHaveAttribute(
+      'href',
+      'https://example.test/reference',
+    );
     expect(screen.getByText('No cards in this container.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next card in Guides' }));
     expect(await screen.findByText('Second guide content.')).toBeInTheDocument();

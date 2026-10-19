@@ -161,7 +161,7 @@ describe('public route and drawer', () => {
     vi.stubGlobal('fetch', fetchMock);
     try {
       renderAt('/login', true);
-      fireEvent.change(screen.getByLabelText('Personal Access Token'), {
+      fireEvent.change(await screen.findByLabelText('Personal Access Token'), {
         target: { value: 'synthetic-test-token' },
       });
       fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
@@ -182,7 +182,7 @@ describe('public route and drawer', () => {
 
   it('loads repository pages and cards at /home after successful GitHub sign-in', async () => {
     const rootPage = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: '11111111-1111-4111-8111-111111111111',
       title: 'Getting started',
       slug: 'getting-started',
@@ -190,17 +190,24 @@ describe('public route and drawer', () => {
       order: 0,
     };
     const childPage = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: '22222222-2222-4222-8222-222222222222',
       title: 'Installation',
       slug: 'installation',
       parentId: rootPage.id,
       order: 0,
     };
-    const card = {
-      schemaVersion: 1,
-      id: '33333333-3333-4333-8333-333333333333',
+    const container = {
+      schemaVersion: 2,
+      id: '44444444-4444-4444-8444-444444444444',
       pageId: childPage.id,
+      title: 'Installation',
+      order: 0,
+    };
+    const card = {
+      schemaVersion: 2,
+      id: '55555555-5555-4555-8555-555555555555',
+      containerId: container.id,
       order: 0,
       title: 'Install the app',
       definition: 'Follow these steps.',
@@ -233,9 +240,19 @@ describe('public route and drawer', () => {
           JSON.stringify({
             tree: [
               {
+                path: 'content/manifest.json',
+                type: 'blob',
+                sha: 'f'.repeat(40),
+              },
+              {
                 path: `content/pages/${rootPage.id}.json`,
                 type: 'blob',
                 sha: 'c'.repeat(40),
+              },
+              {
+                path: `content/containers/${container.id}.json`,
+                type: 'blob',
+                sha: '1'.repeat(40),
               },
               {
                 path: `content/pages/${childPage.id}.json`,
@@ -252,7 +269,13 @@ describe('public route and drawer', () => {
         ),
       )
       .mockResolvedValueOnce(
+        new Response(JSON.stringify({ encoding: 'base64', content: encode({ schemaVersion: 2 }) })),
+      )
+      .mockResolvedValueOnce(
         new Response(JSON.stringify({ encoding: 'base64', content: encode(rootPage) })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ encoding: 'base64', content: encode(container) })),
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ encoding: 'base64', content: encode(childPage) })),

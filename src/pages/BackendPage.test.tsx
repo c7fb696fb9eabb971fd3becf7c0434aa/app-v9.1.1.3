@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackendPage } from './BackendPage';
 
 const { authState, githubRequest, loginWithPat, verifyGitHubPat, readSnapshot, publishV2Snapshot } =
@@ -24,11 +24,12 @@ vi.mock('../features/github', () => ({
 }));
 
 const repositorySnapshot = {
+  schemaVersion: 2 as const,
   sourceCommit: 'a'.repeat(40),
   repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
   pages: [
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '11111111-1111-4111-8111-111111111111',
       title: 'Machine Learning',
       slug: 'machine-learning',
@@ -37,7 +38,7 @@ const repositorySnapshot = {
       description: 'Machine learning documentation.',
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '22222222-2222-4222-8222-222222222222',
       title: 'Neural Networks',
       slug: 'neural-networks',
@@ -46,7 +47,7 @@ const repositorySnapshot = {
       description: 'Neural network notes.',
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '33333333-3333-4333-8333-333333333333',
       title: 'Platform Guide',
       slug: 'platform-guide',
@@ -54,11 +55,34 @@ const repositorySnapshot = {
       order: 1,
     },
   ],
+  containers: [
+    {
+      schemaVersion: 2 as const,
+      id: '77777777-7777-4777-8777-777777777777',
+      pageId: '11111111-1111-4111-8111-111111111111',
+      title: 'Cards',
+      order: 0,
+    },
+    {
+      schemaVersion: 2 as const,
+      id: '88888888-8888-4888-8888-888888888888',
+      pageId: '22222222-2222-4222-8222-222222222222',
+      title: 'Cards',
+      order: 0,
+    },
+    {
+      schemaVersion: 2 as const,
+      id: '99999999-9999-4999-8999-999999999999',
+      pageId: '33333333-3333-4333-8333-333333333333',
+      title: 'Cards',
+      order: 0,
+    },
+  ],
   cards: [
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '44444444-4444-4444-8444-444444444444',
-      pageId: '11111111-1111-4111-8111-111111111111',
+      containerId: '77777777-7777-4777-8777-777777777777',
       order: 0,
       title: 'Tensor Flow',
       tag: 'Foundations',
@@ -66,9 +90,9 @@ const repositorySnapshot = {
       attachments: [],
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '55555555-5555-4555-8555-555555555555',
-      pageId: '11111111-1111-4111-8111-111111111111',
+      containerId: '77777777-7777-4777-8777-777777777777',
       order: 1,
       title: 'Training Fundamentals',
       tag: 'Training',
@@ -76,9 +100,9 @@ const repositorySnapshot = {
       attachments: [],
     },
     {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       id: '66666666-6666-4666-8666-666666666666',
-      pageId: '33333333-3333-4333-8333-333333333333',
+      containerId: '99999999-9999-4999-8999-999999999999',
       order: 0,
       title: 'GitHub Actions',
       definition: 'Build and deployment automation.',
@@ -100,6 +124,11 @@ beforeEach(() => {
   verifyGitHubPat.mockReset().mockResolvedValue(undefined);
   readSnapshot.mockReset().mockResolvedValue(repositorySnapshot);
   publishV2Snapshot.mockReset();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('BackendPage', () => {
@@ -142,6 +171,12 @@ describe('BackendPage', () => {
     expect(leftPanel.querySelector('.backend-workspace-panel-content')).toBeInTheDocument();
     expect(screen.getByRole('form', { name: 'Selected record editor' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Edit name' })).toHaveValue('Tensor Flow');
+    expect(
+      screen.getByRole('textbox', { name: 'Edit name' }).parentElement?.parentElement,
+    ).toHaveClass('backend-editor-identity-fields');
+    expect(
+      screen.getByRole('textbox', { name: 'Edit category' }).parentElement?.parentElement,
+    ).toHaveClass('backend-editor-identity-fields');
     expect(rightPanel.querySelector('.backend-workspace-panel-header')).toBeInTheDocument();
     expect(rightPanel.querySelector('.backend-workspace-panel-content')).toBeInTheDocument();
     expect(rightPanel.querySelector('.backend-workspace-panel-footer')).toBeInTheDocument();
@@ -251,9 +286,114 @@ describe('BackendPage', () => {
         ],
       }),
       'a'.repeat(40),
+      undefined,
+      [],
     );
     await screen.findByRole('form', { name: 'Selected record editor' });
     await waitFor(() => expect(readSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it('previews and atomically publishes uploaded media bytes with the active card', async () => {
+    class URLWithObjectUrls extends URL {
+      static override createObjectURL(_blob: Blob) {
+        return 'blob:pending-media';
+      }
+
+      static override revokeObjectURL(_url: string) {
+        return undefined;
+      }
+    }
+    vi.stubGlobal('URL', URLWithObjectUrls);
+    vi.spyOn(globalThis.crypto, 'randomUUID')
+      .mockReturnValueOnce('44444444-4444-4444-8444-444444444444')
+      .mockReturnValueOnce('55555555-5555-4555-8555-555555555555');
+    const v2Snapshot = {
+      schemaVersion: 2 as const,
+      sourceCommit: 'a'.repeat(40),
+      repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
+      pages: [
+        {
+          schemaVersion: 2 as const,
+          id: '11111111-1111-4111-8111-111111111111',
+          title: 'Platform',
+          slug: 'platform',
+          parentId: null,
+          order: 0,
+        },
+      ],
+      containers: [
+        {
+          schemaVersion: 2 as const,
+          id: '22222222-2222-4222-8222-222222222222',
+          pageId: '11111111-1111-4111-8111-111111111111',
+          title: 'Guides',
+          order: 0,
+        },
+      ],
+      cards: [
+        {
+          schemaVersion: 2 as const,
+          id: '33333333-3333-4333-8333-333333333333',
+          containerId: '22222222-2222-4222-8222-222222222222',
+          order: 0,
+          title: 'Install',
+          definition: 'Install the application.',
+          attachments: [],
+        },
+      ],
+    };
+    readSnapshot.mockResolvedValue(v2Snapshot);
+    publishV2Snapshot.mockResolvedValue({ commitSha: 'b'.repeat(40) });
+    render(
+      <MemoryRouter>
+        <BackendPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('textbox', { name: 'Edit name' });
+    const file = new File(['mp3'], 'release.mp3', { type: 'audio/mpeg' });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: vi.fn().mockResolvedValue(Uint8Array.of(1, 2, 3).buffer),
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Attachment format' }), {
+      target: { value: 'audio' },
+    });
+    fireEvent.change(screen.getByLabelText('Upload audio file'), {
+      target: { files: [file] },
+    });
+    expect(
+      screen.getByRole('article', { name: 'Card preview' }).querySelector('audio source'),
+    ).toHaveAttribute('src', 'blob:pending-media');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText(/Saved as commit bbbbbbb/)).toBeInTheDocument();
+    expect(publishV2Snapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cards: [
+          expect.objectContaining({
+            attachments: [
+              expect.objectContaining({
+                id: '44444444-4444-4444-8444-444444444444',
+                assetId: '55555555-5555-4555-8555-555555555555',
+                kind: 'audio',
+                mimeType: 'audio/mpeg',
+                sizeBytes: 3,
+              }),
+            ],
+          }),
+        ],
+      }),
+      'a'.repeat(40),
+      undefined,
+      [
+        {
+          assetId: '55555555-5555-4555-8555-555555555555',
+          mimeType: 'audio/mpeg',
+          sizeBytes: 3,
+          contentBase64: 'AQID',
+        },
+      ],
+    );
   });
 
   it('preserves the v2 draft and reports an outdated-repository conflict', async () => {
@@ -310,7 +450,30 @@ describe('BackendPage', () => {
     expect(publishV2Snapshot).toHaveBeenCalledOnce();
   });
 
-  it('keeps schema-v1 drafts local until migration is approved', async () => {
+  it('shows the denied GitHub write operation and preserves the draft', async () => {
+    publishV2Snapshot.mockRejectedValue(
+      new Error('github_permission_denied: create-blob (HTTP 403)'),
+    );
+    render(
+      <MemoryRouter>
+        <BackendPage />
+      </MemoryRouter>,
+    );
+
+    const name = await screen.findByRole('textbox', { name: 'Edit name' });
+    fireEvent.change(name, { target: { value: 'Keep after denied write' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'github_permission_denied: create-blob (HTTP 403)',
+    );
+    expect(screen.getByRole('textbox', { name: 'Edit name' })).toHaveValue(
+      'Keep after denied write',
+    );
+  });
+
+  it('saves v2 edits directly as one repository commit', async () => {
+    publishV2Snapshot.mockResolvedValue({ commitSha: 'c'.repeat(40) });
     render(
       <MemoryRouter>
         <BackendPage />
@@ -318,12 +481,56 @@ describe('BackendPage', () => {
     );
 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Edit name' }), {
-      target: { value: 'Local only' },
+      target: { value: 'Migrated card' },
     });
 
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
-    expect(screen.getByText(/reviewed schema-v2 migration/)).toBeInTheDocument();
-    expect(publishV2Snapshot).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText(/Saved as commit ccccccc/)).toBeInTheDocument();
+    expect(publishV2Snapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaVersion: 2,
+        pages: expect.arrayContaining([
+          expect.objectContaining({ id: '11111111-1111-4111-8111-111111111111' }),
+        ]),
+        containers: expect.arrayContaining([
+          expect.objectContaining({
+            pageId: '11111111-1111-4111-8111-111111111111',
+            title: 'Cards',
+          }),
+        ]),
+        cards: expect.arrayContaining([
+          expect.objectContaining({
+            id: '44444444-4444-4444-8444-444444444444',
+            title: 'Migrated card',
+          }),
+        ]),
+      }),
+      'a'.repeat(40),
+      undefined,
+      [],
+    );
+  });
+
+  it('keeps the draft after a stale-head conflict without retrying the write', async () => {
+    publishV2Snapshot.mockRejectedValue(new Error('repository_head_changed'));
+    render(
+      <MemoryRouter>
+        <BackendPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Edit name' }), {
+      target: { value: 'Keep after conflict' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The repository changed since it was loaded.',
+    );
+    expect(publishV2Snapshot).toHaveBeenCalledOnce();
+
+    expect(screen.getByRole('textbox', { name: 'Edit name' })).toHaveValue('Keep after conflict');
   });
 
   it('keeps card drafts per record while carousel selection follows the active card', async () => {
@@ -336,17 +543,55 @@ describe('BackendPage', () => {
 
     const name = screen.getByRole('textbox', { name: 'Edit name' });
     expect(screen.getByRole('textbox', { name: 'Edit tag' })).toHaveValue('Foundations');
+    expect(screen.getByRole('textbox', { name: 'Edit key rule' })).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: 'Edit code' })).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: 'Edit specification' })).toHaveValue('');
     fireEvent.change(name, { target: { value: 'Tensor Flow Revised' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Edit tag' }), {
       target: { value: 'Revised foundations' },
     });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit key rule' }), {
+      target: { value: 'Keep dimensions consistent.' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit code' }), {
+      target: { value: 'tensor = [1, 2, 3]' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit specification' }), {
+      target: { value: 'Input: rank-1 tensor.' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Attachment format' }), {
+      target: { value: 'audio' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Attachment source' }), {
+      target: { value: 'url' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'New attachment label' }), {
+      target: { value: 'Tensor walkthrough' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'New attachment URL' }), {
+      target: { value: 'https://cdn.example.test/tensor.ogg' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add audio URL' }));
+    expect(
+      screen.getByRole('article', { name: 'Card preview' }).querySelector('audio source'),
+    ).toHaveAttribute('src', 'https://cdn.example.test/tensor.ogg');
     expect(screen.getByRole('article', { name: 'Card preview' })).toHaveTextContent(
       'Tensor Flow Revised',
+    );
+    expect(screen.getByRole('article', { name: 'Card preview' })).toHaveTextContent(
+      'Keep dimensions consistent.',
+    );
+    expect(screen.getByRole('article', { name: 'Card preview' })).toHaveTextContent(
+      'tensor = [1, 2, 3]',
+    );
+    expect(screen.getByRole('article', { name: 'Card preview' })).toHaveTextContent(
+      'Input: rank-1 tensor.',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Next card' }));
     expect(screen.getByRole('textbox', { name: 'Edit name' })).toHaveValue('Training Fundamentals');
     expect(screen.getByRole('textbox', { name: 'Edit tag' })).toHaveValue('Training');
+    expect(screen.getByRole('textbox', { name: 'Edit key rule' })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Show card 2: Training Fundamentals' })).toHaveClass(
       'backend-card-carousel-indicator',
       'is-active',
@@ -361,10 +606,27 @@ describe('BackendPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Previous card' }));
     expect(screen.getByRole('textbox', { name: 'Edit name' })).toHaveValue('Tensor Flow Revised');
     expect(screen.getByRole('textbox', { name: 'Edit tag' })).toHaveValue('Revised foundations');
+    expect(screen.getByRole('textbox', { name: 'Edit key rule' })).toHaveValue(
+      'Keep dimensions consistent.',
+    );
+    expect(screen.getByRole('textbox', { name: 'Edit code' })).toHaveValue('tensor = [1, 2, 3]');
+    expect(screen.getByRole('textbox', { name: 'Edit specification' })).toHaveValue(
+      'Input: rank-1 tensor.',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Next card' }));
     expect(screen.getByRole('textbox', { name: 'Edit content' })).toHaveValue(
       'Draft for the second card.',
     );
+    expect(
+      screen.getByText('No attachments yet. Add a file or a typed URL below.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous card' }));
+    expect(screen.getByRole('textbox', { name: 'Edit attachment label' })).toHaveValue(
+      'Tensor walkthrough',
+    );
+    expect(
+      screen.getByRole('article', { name: 'Card preview' }).querySelector('audio source'),
+    ).toHaveAttribute('src', 'https://cdn.example.test/tensor.ogg');
   });
 
   it('shows empty containers without carousel controls and single-card containers without dots', async () => {
@@ -407,6 +669,7 @@ describe('BackendPage', () => {
     readSnapshot.mockResolvedValueOnce({
       ...repositorySnapshot,
       pages: [],
+      containers: [],
       cards: [],
     });
     render(
@@ -418,6 +681,28 @@ describe('BackendPage', () => {
     expect(await screen.findByText(/This repository has no pages yet/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     expect(screen.getByRole('button', { name: 'New page' })).toBeEnabled();
+  });
+
+  it('starts an empty v2 workspace directly', async () => {
+    readSnapshot.mockResolvedValueOnce({
+      schemaVersion: 2,
+      sourceCommit: 'a'.repeat(40),
+      pages: [],
+      containers: [],
+      cards: [],
+      repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
+    });
+    render(
+      <MemoryRouter>
+        <BackendPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/This repository has no pages yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /initialize/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByRole('button', { name: 'New page' })).toBeEnabled();
+    expect(publishV2Snapshot).not.toHaveBeenCalled();
   });
 
   it('reports repository read errors and allows retrying the read', async () => {
@@ -518,6 +803,8 @@ describe('BackendPage', () => {
     expect(firstPanel.querySelector('.backend-workspace-panel-layout')).toHaveAttribute('inert');
     expect(secondPanel).not.toHaveAttribute('inert');
     expect(container.querySelector('.backend-workspace-container')).not.toHaveAttribute('inert');
+    expect(container.querySelector('.backend-workspace-panels')).not.toHaveAttribute('inert');
+    expect(syncPanel.closest('[inert]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Close GitHub sync' })).toHaveFocus();
 
     fireEvent.keyDown(syncPanel, { key: 'Escape' });

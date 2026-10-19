@@ -1,6 +1,7 @@
 export { ActionToolbar, type ToolbarAction } from './ActionToolbar';
+export { AttachmentEditor } from './AttachmentEditor';
 export { CarouselControls, type CarouselItem } from './CarouselControls';
-export { CardConnector, CardPreview, CardSummary } from './CardPreview';
+export { CardAttachments, CardConnector, CardPreview, CardSummary } from './CardPreview';
 export {
   GitHubSyncDialog,
   type GitHubRepositoryTarget,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AnchoredDialog,
+  AttachmentEditor,
   CardConnector,
   CardPreview,
   CardSummary,
@@ -18,7 +19,7 @@ import {
 import { APP_ROUTES, GITHUB_REPOSITORY } from '../../config';
 import { useAuth } from '../features/auth';
 import { createGitHubRepositoryClient } from '../features/github';
-import type { RepositorySnapshotResponse } from '../lib/content';
+import type { Attachment, RepositorySnapshotResponse, StoredAttachment } from '../lib/content';
 import { resolveCardContainer } from '../lib/content-resolution';
 import { backendWorkspaceCopy, cardToolbarActions, gitHubSyncCopy } from './backendWorkspaceConfig';
 import { BackendTree, type ExplorerRecord } from './BackendTree';
@@ -33,7 +34,25 @@ type RecordDraft = {
   category: string;
   summary: string;
   tag?: string;
+  keyRule?: string;
+  code?: string;
+  spec?: string;
+  attachments?: Attachment[];
 };
+
+type PendingMedia = {
+  file: File;
+  previewUrl: string;
+};
+
+async function encodeFileBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
 
 export function BackendPage() {
   const navigate = useNavigate();
@@ -56,10 +75,19 @@ export function BackendPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const stableIds = useRef(new Map<string, string>());
+  const pendingMedia = useRef(new Map<string, PendingMedia>());
   const selectButtonRef = useRef<HTMLButtonElement>(null);
   const githubSyncButtonRef = useRef<HTMLButtonElement>(null);
   const copy = backendWorkspaceCopy;
   const isExplorerOpen = openPanel === 'explorer';
+
+  function clearPendingMedia() {
+    for (const { previewUrl } of pendingMedia.current.values()) URL.revokeObjectURL(previewUrl);
+    pendingMedia.current.clear();
+  }
+
+  useEffect(() => () => clearPendingMedia(), []);
 
   useEffect(() => {
     let active = true;
@@ -70,6 +98,8 @@ export function BackendPage() {
     setRepositorySnapshot(null);
     setSelectedId('');
     setDrafts({});
+    clearPendingMedia();
+    stableIds.current.clear();
     void repositoryClient
       .readSnapshot()
       .then((snapshot) => {
@@ -82,7 +112,7 @@ export function BackendPage() {
       })
       .catch((cause: unknown) => {
         if (!active) return;
-        const code = cause instanceof Error ? cause.message : 'unknown_error';
+        const code = cause instanceof Error ? cause.message.split(':', 1)[0]! : 'unknown_error';
         if (code === 'github_token_invalid' || code === 'authentication_required') {
           setLoadError('Your GitHub sign-in expired. Sign in again to view the documentation.');
         } else if (code === 'github_rate_limited') {
@@ -105,6 +135,22 @@ export function BackendPage() {
     ...record,
     ...drafts[record.id],
   })) as ExplorerRecord[];
+  useEffect(() => {
+    const referencedAssets = new Set(
+      visibleRecords.flatMap((record) =>
+        record.kind === 'card'
+          ? (record.attachments ?? []).flatMap((attachment) =>
+              'assetId' in attachment ? [attachment.assetId] : [],
+            )
+          : [],
+      ),
+    );
+    for (const [assetId, pending] of pendingMedia.current) {
+      if (referencedAssets.has(assetId)) continue;
+      URL.revokeObjectURL(pending.previewUrl);
+      pendingMedia.current.delete(assetId);
+    }
+  }, [visibleRecords]);
   const selectedRecord = visibleRecords.find((record) => record.id === selectedId) ?? null;
   const activeContainerId =
     selectedRecord?.kind === 'container'
@@ -162,7 +208,15 @@ export function BackendPage() {
         title: editorRecord.title,
         category: editorRecord.category,
         summary: editorRecord.summary,
-        ...(editorRecord.kind === 'card' ? { tag: editorRecord.tag ?? '' } : {}),
+        ...(editorRecord.kind === 'card'
+          ? {
+              tag: editorRecord.tag ?? '',
+              keyRule: editorRecord.keyRule ?? '',
+              code: editorRecord.code ?? '',
+              spec: editorRecord.spec ?? '',
+              attachments: editorRecord.attachments ?? [],
+            }
+          : {}),
       };
       return {
         ...current,
@@ -174,36 +228,72 @@ export function BackendPage() {
     });
   }
 
+  function updateAttachments(attachments: Attachment[]) {
+    if (!editorRecord || editorRecord.kind !== 'card') return;
+    setDrafts((current) => {
+      const existing = current[editorRecord.id] ?? {
+        title: editorRecord.title,
+        category: editorRecord.category,
+        summary: editorRecord.summary,
+        tag: editorRecord.tag ?? '',
+        keyRule: editorRecord.keyRule ?? '',
+        code: editorRecord.code ?? '',
+        spec: editorRecord.spec ?? '',
+        attachments: editorRecord.attachments ?? [],
+      };
+      return { ...current, [editorRecord.id]: { ...existing, attachments } };
+    });
+  }
+
   async function saveChanges() {
     if (!repositorySnapshot || !hasUnsavedChanges || isSaving) return;
     setSaveError(null);
     setSaveStatus(null);
     setIsSaving(true);
     try {
-      const content = explorerRecordsToV2Content(visibleRecords, repositorySnapshot);
+      const contentToPublish = explorerRecordsToV2Content(
+        visibleRecords,
+        repositorySnapshot,
+        stableIds.current,
+      );
+      const mediaUploads = [];
+      for (const card of contentToPublish.cards) {
+        for (const attachment of card.attachments) {
+          if (!('assetId' in attachment)) continue;
+          const pending = pendingMedia.current.get(attachment.assetId);
+          if (!pending) continue;
+          mediaUploads.push({
+            assetId: attachment.assetId,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+            contentBase64: await encodeFileBase64(pending.file),
+          });
+        }
+      }
       const { commitSha } = await repositoryClient.publishV2Snapshot(
-        content,
+        contentToPublish,
         repositorySnapshot.sourceCommit,
+        undefined,
+        mediaUploads,
       );
       setSaveStatus(`Saved as commit ${commitSha.slice(0, 7)}. Reloading repository content…`);
       setDrafts({});
+      clearPendingMedia();
+      setOpenPanel(null);
       setReload((value) => value + 1);
     } catch (cause) {
-      const code = cause instanceof Error ? cause.message : 'unknown_error';
+      const detail = cause instanceof Error ? cause.message : 'unknown_error';
+      const code = detail.split(':', 1)[0]!;
       if (code === 'repository_head_changed') {
         setSaveError(
           'The repository changed since it was loaded. Your draft is still here; reload and reconcile before saving again.',
-        );
-      } else if (code === 'repository_migration_required') {
-        setSaveError(
-          'This v1 repository must be migrated to schema v2 before these edits can be saved.',
         );
       } else if (code === 'invalid_content_relationships') {
         setSaveError('Some edits are invalid or incomplete. Correct them before saving.');
       } else if (code === 'github_token_invalid' || code === 'authentication_required') {
         setSaveError('Your GitHub sign-in expired. Sign in again before saving.');
       } else {
-        setSaveError(`Could not save repository content (${code}). Your draft is still here.`);
+        setSaveError(`Could not save repository content (${detail}). Your draft is still here.`);
       }
     } finally {
       setIsSaving(false);
@@ -224,7 +314,7 @@ export function BackendPage() {
       <WorkspacePageHeader
         title={copy.header.title}
         ariaLabel={copy.header.ariaLabel}
-        inert={isExplorerOpen}
+        inert={openPanel !== null}
         classNames={{
           root: 'backend-header',
           inner: 'backend-header-inner',
@@ -250,7 +340,7 @@ export function BackendPage() {
       <main className="backend-main">
         <WorkspaceFrame
           ariaLabel={copy.workspaceLabel}
-          panelsInert={isExplorerOpen}
+          panelsInert={openPanel === 'explorer'}
           classNames={{
             root: 'backend-workspace-container',
             panels: 'backend-workspace-panels',
@@ -335,7 +425,7 @@ export function BackendPage() {
                   </Button>
                 </div>
               ) : records.length === 0 ? (
-                <div className="backend-editor-empty" role="status">
+                <div className="backend-editor-empty">
                   This repository has no pages yet. Use Select to create a local draft page.
                 </div>
               ) : editorRecord ? (
@@ -350,30 +440,59 @@ export function BackendPage() {
                   <p className="backend-editor-draft-status" role="status">
                     Draft edits stay in this browser session until saved as one repository commit.
                   </p>
-                  <label className="backend-editor-field">
-                    <span>Name</span>
-                    <input
-                      aria-label="Edit name"
-                      value={editorRecord.title}
-                      onChange={(event) => updateDraft('title', event.currentTarget.value)}
-                    />
-                  </label>
-                  <label className="backend-editor-field">
-                    <span>Category</span>
-                    <input aria-label="Edit category" value={editorRecord.category} readOnly />
-                    <span className="backend-editor-field-hint">
-                      Category is derived from the page hierarchy.
-                    </span>
-                  </label>
-                  {editorRecord.kind === 'card' && (
+                  <div className="backend-editor-identity-fields">
                     <label className="backend-editor-field">
-                      <span>Tag</span>
+                      <span>Name</span>
                       <input
-                        aria-label="Edit tag"
-                        value={editorRecord.tag ?? ''}
-                        onChange={(event) => updateDraft('tag', event.currentTarget.value)}
+                        aria-label="Edit name"
+                        value={editorRecord.title}
+                        onChange={(event) => updateDraft('title', event.currentTarget.value)}
                       />
                     </label>
+                    <label className="backend-editor-field">
+                      <span>Category</span>
+                      <input aria-label="Edit category" value={editorRecord.category} readOnly />
+                    </label>
+                  </div>
+                  {editorRecord.kind === 'card' && (
+                    <>
+                      <label className="backend-editor-field">
+                        <span>Tag</span>
+                        <input
+                          aria-label="Edit tag"
+                          value={editorRecord.tag ?? ''}
+                          onChange={(event) => updateDraft('tag', event.currentTarget.value)}
+                        />
+                      </label>
+                      <label className="backend-editor-field">
+                        <span>Key rule</span>
+                        <textarea
+                          aria-label="Edit key rule"
+                          value={editorRecord.keyRule ?? ''}
+                          onChange={(event) => updateDraft('keyRule', event.currentTarget.value)}
+                          rows={3}
+                        />
+                      </label>
+                      <label className="backend-editor-field">
+                        <span>Code</span>
+                        <textarea
+                          aria-label="Edit code"
+                          value={editorRecord.code ?? ''}
+                          onChange={(event) => updateDraft('code', event.currentTarget.value)}
+                          rows={5}
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label className="backend-editor-field">
+                        <span>Specification</span>
+                        <textarea
+                          aria-label="Edit specification"
+                          value={editorRecord.spec ?? ''}
+                          onChange={(event) => updateDraft('spec', event.currentTarget.value)}
+                          rows={5}
+                        />
+                      </label>
+                    </>
                   )}
                   <label className="backend-editor-field backend-editor-field-content">
                     <span>{editorRecord.kind === 'card' ? 'Card content' : 'Description'}</span>
@@ -390,11 +509,22 @@ export function BackendPage() {
                       </span>
                     )}
                   </label>
-                  {repositorySnapshot?.schemaVersion !== 2 && hasUnsavedChanges && (
-                    <p className="backend-editor-draft-status" role="status">
-                      Saving requires the reviewed schema-v2 migration. Your local draft is not
-                      published.
-                    </p>
+                  {editorRecord.kind === 'card' && (
+                    <AttachmentEditor
+                      key={editorRecord.id}
+                      attachments={editorRecord.attachments ?? []}
+                      onChange={updateAttachments}
+                      onAddFile={(attachment: StoredAttachment, file) => {
+                        const previewUrl = URL.createObjectURL(file);
+                        pendingMedia.current.set(attachment.assetId, { file, previewUrl });
+                      }}
+                      onRemove={(attachment) => {
+                        if (!('assetId' in attachment)) return;
+                        const pending = pendingMedia.current.get(attachment.assetId);
+                        if (pending) URL.revokeObjectURL(pending.previewUrl);
+                        pendingMedia.current.delete(attachment.assetId);
+                      }}
+                    />
                   )}
                   {saveError && (
                     <p className="status-message status-error" role="alert">
@@ -406,12 +536,7 @@ export function BackendPage() {
                     type="button"
                     variant="primary"
                     onClick={() => void saveChanges()}
-                    disabled={
-                      !hasUnsavedChanges ||
-                      isSaving ||
-                      loading ||
-                      repositorySnapshot?.schemaVersion !== 2
-                    }
+                    disabled={!hasUnsavedChanges || isSaving || loading}
                   >
                     {isSaving ? 'Saving…' : 'Save changes'}
                   </Button>
@@ -507,6 +632,12 @@ export function BackendPage() {
                       ? 'Add a card to this container to begin the preview.'
                       : 'Select a card container from the workspace explorer.')
                   }
+                  {...(activeCard?.keyRule !== undefined ? { keyRule: activeCard.keyRule } : {})}
+                  {...(activeCard?.code !== undefined ? { code: activeCard.code } : {})}
+                  {...(activeCard?.spec !== undefined ? { spec: activeCard.spec } : {})}
+                  attachments={activeCard?.attachments ?? []}
+                  repository={repositorySnapshot?.repository}
+                  previewUrlForAsset={(assetId) => pendingMedia.current.get(assetId)?.previewUrl}
                   carousel={
                     <CarouselControls
                       items={previewCards}

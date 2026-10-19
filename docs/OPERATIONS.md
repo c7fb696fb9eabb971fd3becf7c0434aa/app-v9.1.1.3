@@ -108,9 +108,11 @@ repeat the exposed value.
   and invalid-token response.
 - Production repository edits and deploy operations require explicit approval of the exact
   operation. Before an authorized Git write, verify branch, remote, staged diff, and test result.
-- A v1-to-v2 migration plan is read-only and bound to the exact source commit; review its mapping,
-  file paths, and content before considering any apply step. The application does not apply
-  migration plans. Any repository migration write requires explicit approval of the exact target
-  and operation, plus a reviewed recovery plan.
+- The application reads and writes schema v2 only. Legacy v1 repository content must be converted
+  outside the application before it can be used. An empty repository needs no setup commit; the
+  first content save writes `content/manifest.json` with the new v2 records.
+- A successful connection test verifies live repository reads, not Contents write access or branch
+  policy. If a save is denied, use the reported GitHub operation and HTTP status to check token
+  Contents permissions and repository branch rules. Never collect or log the PAT for diagnosis.
 - See [ADR 0002](./adr/0002-pat-auth-and-session-security.md) and
   [Project Access](../AGENTIC/PROJECT_ACCESS.md) for full security controls.

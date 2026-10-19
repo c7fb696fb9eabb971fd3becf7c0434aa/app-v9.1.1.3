@@ -1,23 +1,16 @@
 import { createElement, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import {
-  assetExtensionForMimeType,
-  type CardRecord,
   type CardRecordV2,
-  type PageRecord,
   type PageRecordV2,
   type RepositorySnapshotResponse,
-  type StoredAttachmentMimeType,
 } from '../lib/content';
 import { useAuth } from '../features/auth';
 import { createGitHubRepositoryClient } from '../features/github';
 import { Button } from '../components/Primitives';
-import { CarouselControls } from '../components';
-import {
-  resolveRepositoryPagePreviews,
-  virtualContainerIdForPage,
-} from '../lib/content-resolution';
+import { CardAttachments, CarouselControls } from '../components';
+import { resolveRepositoryPagePreviews } from '../lib/content-resolution';
 
-type RepositoryPageRecord = PageRecord | PageRecordV2;
+type RepositoryPageRecord = PageRecordV2;
 
 type PageNode = RepositoryPageRecord & {
   children: PageNode[];
@@ -38,24 +31,11 @@ function buildPageTree(pages: readonly RepositoryPageRecord[]): PageNode[] {
   return roots;
 }
 
-function mediaUrl(
-  snapshot: RepositorySnapshotResponse,
-  assetId: string,
-  mimeType: StoredAttachmentMimeType,
-): string {
-  const extension = assetExtensionForMimeType(mimeType);
-  const { owner, name, branch } = snapshot.repository;
-  return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/${branch
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}/content/media/${assetId}.${extension}`;
-}
-
 function CardView({
   card,
   snapshot,
 }: {
-  card: CardRecord | CardRecordV2;
+  card: CardRecordV2;
   snapshot: RepositorySnapshotResponse;
 }) {
   return (
@@ -76,49 +56,7 @@ function CardView({
           <strong>Specification:</strong> {card.spec}
         </p>
       )}
-      {card.attachments.length > 0 && (
-        <ul className="published-attachments">
-          {card.attachments.map((attachment) => {
-            if (attachment.kind === 'link') {
-              return (
-                <li key={attachment.id}>
-                  <a href={attachment.url} target="_blank" rel="noreferrer">
-                    {attachment.label}
-                  </a>
-                </li>
-              );
-            }
-            const url = mediaUrl(snapshot, attachment.assetId, attachment.mimeType);
-            return (
-              <li key={attachment.id}>
-                {attachment.kind === 'image' && (
-                  <a href={url} target="_blank" rel="noreferrer">
-                    <img src={url} alt={attachment.label} loading="lazy" />
-                    <span>{attachment.label}</span>
-                  </a>
-                )}
-                {attachment.kind === 'audio' && (
-                  <div>
-                    <p>{attachment.label}</p>
-                    <audio controls preload="none" src={url} />
-                  </div>
-                )}
-                {attachment.kind === 'video' && (
-                  <div>
-                    <p>{attachment.label}</p>
-                    <video controls preload="none" src={url} />
-                  </div>
-                )}
-                {attachment.kind === 'pdf' && (
-                  <a href={url} target="_blank" rel="noreferrer">
-                    {attachment.label} (PDF)
-                  </a>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <CardAttachments attachments={card.attachments} repository={snapshot.repository} />
     </article>
   );
 }
@@ -133,13 +71,9 @@ function PageView({
   level: number;
 }) {
   const [selectedCardIds, setSelectedCardIds] = useState<Record<string, string>>({});
-  const virtualContainerId = virtualContainerIdForPage(page.id);
   const activeCardIds = Object.fromEntries(
     Object.entries(selectedCardIds).filter(([containerId, cardId]) =>
-      snapshot.schemaVersion === 2
-        ? snapshot.cards.some((card) => card.containerId === containerId && card.id === cardId)
-        : containerId === virtualContainerId &&
-          snapshot.cards.some((card) => card.pageId === page.id && card.id === cardId),
+      snapshot.cards.some((card) => card.containerId === containerId && card.id === cardId),
     ),
   );
   const previews = resolveRepositoryPagePreviews(snapshot, page.id, activeCardIds);
@@ -157,8 +91,7 @@ function PageView({
       ) : (
         previews.map((preview) => {
           const activeCard = preview.activeCard;
-          const containerLabel =
-            snapshot.schemaVersion === 2 ? preview.container.title : page.title;
+          const containerLabel = preview.container.title;
           return (
             <div
               key={preview.container.id}

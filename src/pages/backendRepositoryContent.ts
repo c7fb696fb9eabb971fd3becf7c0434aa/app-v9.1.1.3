@@ -29,15 +29,28 @@ function slugFromTitle(title: string): string {
 export function explorerRecordsToV2Content(
   records: readonly ExplorerRecord[],
   snapshot: RepositorySnapshotResponse,
+  stableIds: Map<string, string> = new Map(),
 ): ContentRecordsV2 {
-  if (snapshot.schemaVersion !== CONTENT_SCHEMA_VERSION_V2) {
-    throw new Error('repository_migration_required');
+  function stableIdFor(explorerId: string): string {
+    if (STABLE_ID_PATTERN.test(explorerId)) return explorerId;
+    const existingId = stableIds.get(explorerId);
+    if (existingId) return existingId;
+    const id = createStableId();
+    stableIds.set(explorerId, id);
+    return id;
   }
+
+  const sourceContent: ContentRecordsV2 = {
+    schemaVersion: CONTENT_SCHEMA_VERSION_V2,
+    pages: snapshot.pages,
+    containers: snapshot.containers,
+    cards: snapshot.cards,
+  };
 
   const idByExplorerId = new Map<string, string>();
   const allIds = new Set<string>();
   for (const record of records) {
-    const id = STABLE_ID_PATTERN.test(record.id) ? record.id : createStableId();
+    const id = stableIdFor(record.id);
     if (allIds.has(id)) throw new Error('record_id_collision');
     allIds.add(id);
     idByExplorerId.set(record.id, id);
@@ -56,7 +69,7 @@ export function explorerRecordsToV2Content(
     if (record.parentId !== null && (!parentId || !pageByExplorerId.has(record.parentId))) {
       throw new Error('page_parent_invalid');
     }
-    const original = snapshot.pages.find((page) => page.id === id);
+    const original = sourceContent.pages.find((page) => page.id === id);
     const baseSlug = original?.slug ?? slugFromTitle(record.title);
     let slug = baseSlug;
     const siblingKey = (candidate: string) => `${parentId ?? 'root'}:${candidate}`;
@@ -95,7 +108,7 @@ export function explorerRecordsToV2Content(
       };
     });
 
-  const originalCards = snapshot.schemaVersion === CONTENT_SCHEMA_VERSION_V2 ? snapshot.cards : [];
+  const originalCards = sourceContent.cards;
   const cards = records
     .filter((record): record is Extract<ExplorerRecord, { kind: 'card' }> => record.kind === 'card')
     .map((record) => {
@@ -107,7 +120,14 @@ export function explorerRecordsToV2Content(
       }
       const tag = record.tag?.trim();
       const originalFields = original
-        ? (({ tag: _originalTag, ...fields }) => fields)(original)
+        ? (({
+            tag: _originalTag,
+            keyRule: _originalKeyRule,
+            code: _originalCode,
+            spec: _originalSpec,
+            attachments: _originalAttachments,
+            ...fields
+          }) => fields)(original)
         : {};
       return {
         ...originalFields,
@@ -118,7 +138,10 @@ export function explorerRecordsToV2Content(
         title: record.title,
         definition: record.summary,
         ...(tag ? { tag } : {}),
-        attachments: original?.attachments ?? [],
+        ...(record.keyRule ? { keyRule: record.keyRule } : {}),
+        ...(record.code ? { code: record.code } : {}),
+        ...(record.spec ? { spec: record.spec } : {}),
+        attachments: record.attachments ?? original?.attachments ?? [],
       };
     });
 

@@ -1,24 +1,20 @@
 import {
   CardContainerRecordV2Schema,
-  CardRecordSchema,
   CardRecordV2Schema,
   cardStoragePath,
   CONTENT_MANIFEST_PATH,
   ContentManifestV2Schema,
-  ContentRecordsSchema,
   ContentRecordsV2Schema,
   CONTENT_SCHEMA_VERSION_V2,
-  PageRecordSchema,
   PageRecordV2Schema,
   pageStoragePath,
-  SCHEMA_VERSION,
+  mediaStoragePath,
   containerStoragePath,
-  type CardRecord,
   type CardContainerRecordV2,
   type CardRecordV2,
-  type PageRecord,
   type PageRecordV2,
   type RepositorySnapshotResponse,
+  type StoredAttachmentMimeType,
 } from '../../lib/content';
 import { GITHUB_REPOSITORY } from '../../../config';
 
@@ -29,6 +25,13 @@ const PAGE_PATH_PATTERN = /^content\/pages\/([0-9a-f-]{36})\.json$/;
 const CARD_PATH_PATTERN = /^content\/cards\/([0-9a-f-]{36})\.json$/;
 const CONTAINER_PATH_PATTERN = /^content\/containers\/([0-9a-f-]{36})\.json$/;
 type RequestGithub = (path: string, init?: RequestInit) => Promise<Response>;
+
+export interface RepositoryMediaUpload {
+  assetId: string;
+  mimeType: StoredAttachmentMimeType;
+  sizeBytes: number;
+  contentBase64: string;
+}
 
 interface GitHubTreeEntry {
   path?: string;
@@ -54,20 +57,30 @@ interface GitHubBlob {
   encoding?: string;
 }
 
-function failForResponse(response: Response, path: string): Error {
-  if (response.status === 401) return new Error('github_token_invalid');
+function requestOperation(path: string, method: string): string {
+  if (path.includes('/git/blobs')) return method === 'POST' ? 'create-blob' : 'read-blob';
+  if (path.includes('/git/trees')) return method === 'POST' ? 'create-tree' : 'read-tree';
+  if (path.includes('/git/commits')) return method === 'POST' ? 'create-commit' : 'read-commit';
+  if (path.includes('/git/refs/heads/'))
+    return method === 'PATCH' ? 'update-branch' : 'read-branch';
+  return 'repository-request';
+}
+
+function failForResponse(response: Response, path: string, method: string): Error {
+  const diagnostic = `: ${requestOperation(path, method)} (HTTP ${response.status})`;
+  if (response.status === 401) return new Error(`github_token_invalid${diagnostic}`);
   if (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
-    return new Error('github_rate_limited');
+    return new Error(`github_rate_limited${diagnostic}`);
   }
   if (response.status === 403 || response.status === 404) {
-    return new Error('github_permission_denied');
+    return new Error(`github_permission_denied${diagnostic}`);
   }
-  if (response.status === 429) return new Error('github_rate_limited');
-  if (response.status === 409) return new Error('repository_head_changed');
+  if (response.status === 429) return new Error(`github_rate_limited${diagnostic}`);
+  if (response.status === 409) return new Error(`repository_head_changed${diagnostic}`);
   if (response.status === 422 && path.includes('/git/refs/heads/')) {
-    return new Error('repository_head_changed');
+    return new Error(`repository_head_changed${diagnostic}`);
   }
-  return new Error('github_request_failed');
+  return new Error(`github_request_failed${diagnostic}`);
 }
 
 async function requestJson<T>(
@@ -76,7 +89,7 @@ async function requestJson<T>(
   init?: RequestInit,
 ): Promise<T> {
   const response = await request(path, init);
-  if (!response.ok) throw failForResponse(response, path);
+  if (!response.ok) throw failForResponse(response, path, (init?.method ?? 'GET').toUpperCase());
   try {
     return (await response.json()) as T;
   } catch {
@@ -124,12 +137,6 @@ function decodeBase64(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-function parseContentRecords(pages: PageRecord[], cards: CardRecord[]) {
-  const result = ContentRecordsSchema.safeParse({ schemaVersion: SCHEMA_VERSION, pages, cards });
-  if (!result.success) throw new Error('invalid_content_relationships');
-  return result.data;
-}
-
 function parseContentRecordsV2(
   pages: PageRecordV2[],
   containers: CardContainerRecordV2[],
@@ -172,6 +179,57 @@ function recordFiles(records: ReturnType<typeof parseContentRecordsV2>) {
     })),
     ...records.cards.map((record) => ({ path: cardStoragePath(record.id), record })),
   ].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function validateMediaUploads(
+  records: ReturnType<typeof parseContentRecordsV2>,
+  uploads: readonly RepositoryMediaUpload[],
+) {
+  const references = new Map<string, { mimeType: StoredAttachmentMimeType; sizeBytes: number }>();
+  for (const card of records.cards) {
+    for (const attachment of card.attachments) {
+      if (!('assetId' in attachment)) continue;
+      const previous = references.get(attachment.assetId);
+      if (
+        previous &&
+        (previous.mimeType !== attachment.mimeType || previous.sizeBytes !== attachment.sizeBytes)
+      ) {
+        throw new Error('invalid_media_asset');
+      }
+      references.set(attachment.assetId, {
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+      });
+    }
+  }
+  const seen = new Set<string>();
+  return uploads.map((upload) => {
+    const reference = references.get(upload.assetId);
+    if (
+      !reference ||
+      reference.mimeType !== upload.mimeType ||
+      reference.sizeBytes !== upload.sizeBytes ||
+      seen.has(upload.assetId) ||
+      !Number.isInteger(upload.sizeBytes) ||
+      upload.sizeBytes < 1 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(upload.contentBase64)
+    ) {
+      throw new Error('invalid_media_asset');
+    }
+    let byteLength: number;
+    try {
+      byteLength = atob(upload.contentBase64).length;
+    } catch {
+      throw new Error('invalid_media_asset');
+    }
+    if (byteLength !== upload.sizeBytes) throw new Error('invalid_media_asset');
+    seen.add(upload.assetId);
+    return {
+      path: mediaStoragePath(upload.assetId, upload.mimeType),
+      content: upload.contentBase64,
+      encoding: 'base64' as const,
+    };
+  });
 }
 
 export class GitHubRepositoryClient {
@@ -243,65 +301,39 @@ export class GitHubRepositoryClient {
       }
       if (PAGE_PATH_PATTERN.test(path)) {
         const value = parseJsonRecord(text, path);
-        if (isSchemaVersionV2(value)) {
-          const page = parseValueRecord(value, PageRecordV2Schema, path);
-          if (pageStoragePath(page.id) !== path) throw new Error(`record_path_mismatch:${path}`);
-          return { schemaVersion: CONTENT_SCHEMA_VERSION_V2, kind: 'page', record: page } as const;
-        }
-        const page = parseValueRecord(value, PageRecordSchema, path);
+        if (!isSchemaVersionV2(value))
+          throw new Error(`unsupported_content_schema_version:${path}`);
+        const page = parseValueRecord(value, PageRecordV2Schema, path);
         if (pageStoragePath(page.id) !== path) throw new Error(`record_path_mismatch:${path}`);
-        return { schemaVersion: SCHEMA_VERSION, kind: 'page', record: page } as const;
+        return { schemaVersion: CONTENT_SCHEMA_VERSION_V2, kind: 'page', record: page } as const;
       }
       const value = parseJsonRecord(text, path);
-      if (isSchemaVersionV2(value)) {
-        const card = parseValueRecord(value, CardRecordV2Schema, path);
-        if (cardStoragePath(card.id) !== path) throw new Error(`record_path_mismatch:${path}`);
-        return { schemaVersion: CONTENT_SCHEMA_VERSION_V2, kind: 'card', record: card } as const;
-      } else {
-        const card = parseValueRecord(value, CardRecordSchema, path);
-        if (cardStoragePath(card.id) !== path) throw new Error(`record_path_mismatch:${path}`);
-        return { schemaVersion: SCHEMA_VERSION, kind: 'card', record: card } as const;
-      }
+      if (!isSchemaVersionV2(value)) throw new Error(`unsupported_content_schema_version:${path}`);
+      const card = parseValueRecord(value, CardRecordV2Schema, path);
+      if (cardStoragePath(card.id) !== path) throw new Error(`record_path_mismatch:${path}`);
+      return { schemaVersion: CONTENT_SCHEMA_VERSION_V2, kind: 'card', record: card } as const;
     });
 
-    const versions = new Set(loaded.map((entry) => entry.schemaVersion));
-    if (versions.size > 1) throw new Error('mixed_content_schema_versions');
-
-    const schemaVersion = versions.values().next().value ?? SCHEMA_VERSION;
-    const pagesV1: PageRecord[] = [];
-    const cardsV1: CardRecord[] = [];
     const pagesV2: PageRecordV2[] = [];
     const containersV2: CardContainerRecordV2[] = [];
     const cardsV2: CardRecordV2[] = [];
     for (const entry of loaded) {
-      if (entry.schemaVersion === CONTENT_SCHEMA_VERSION_V2) {
-        if (entry.kind === 'page') pagesV2.push(entry.record);
-        else if (entry.kind === 'container') containersV2.push(entry.record);
-        else if (entry.kind === 'card') cardsV2.push(entry.record);
-      } else if (entry.kind === 'page') {
-        pagesV1.push(entry.record);
-      } else {
-        cardsV1.push(entry.record);
-      }
+      if (entry.kind === 'page') pagesV2.push(entry.record);
+      else if (entry.kind === 'container') containersV2.push(entry.record);
+      else if (entry.kind === 'card') cardsV2.push(entry.record);
     }
 
-    if (schemaVersion === CONTENT_SCHEMA_VERSION_V2) {
-      parseContentRecordsV2(pagesV2, containersV2, cardsV2);
-      return {
-        schemaVersion: CONTENT_SCHEMA_VERSION_V2,
-        sourceCommit,
-        pages: pagesV2,
-        containers: containersV2,
-        cards: cardsV2,
-        repository: { owner: OWNER, name: REPOSITORY, branch: BRANCH },
-      };
+    const hasContentRecords = loaded.length > 0;
+    if (hasContentRecords && !loaded.some((entry) => entry.kind === 'manifest')) {
+      throw new Error('content_manifest_missing');
     }
-    parseContentRecords(pagesV1, cardsV1);
+    parseContentRecordsV2(pagesV2, containersV2, cardsV2);
     return {
-      schemaVersion: SCHEMA_VERSION,
+      schemaVersion: CONTENT_SCHEMA_VERSION_V2,
       sourceCommit,
-      pages: pagesV1,
-      cards: cardsV1,
+      pages: pagesV2,
+      containers: containersV2,
+      cards: cardsV2,
       repository: { owner: OWNER, name: REPOSITORY, branch: BRANCH },
     };
   }
@@ -310,6 +342,7 @@ export class GitHubRepositoryClient {
     value: unknown,
     expectedHead: string,
     message = 'Update documentation content',
+    mediaUploads: readonly RepositoryMediaUpload[] = [],
   ): Promise<{ commitSha: string }> {
     if (!COMMIT_SHA_PATTERN.test(expectedHead)) throw new Error('repository_expected_head_invalid');
     if (!message.trim() || message.length > 200)
@@ -318,6 +351,7 @@ export class GitHubRepositoryClient {
     const parsed = ContentRecordsV2Schema.safeParse(value);
     if (!parsed.success) throw new Error('invalid_content_relationships');
     const records = recordFiles(parsed.data);
+    const mediaFiles = validateMediaUploads(parsed.data, mediaUploads);
     if ((await this.getHead()) !== expectedHead) throw new Error('repository_head_changed');
 
     const parent = await requestJson<GitHubCommit>(
@@ -347,7 +381,7 @@ export class GitHubRepositoryClient {
           !desiredPaths.has(entry.path),
       )
       .map((entry) => entry.path!);
-    const blobs = await mapLimit(records, 8, async ({ path, record }) => {
+    const recordBlobs = await mapLimit(records, 8, async ({ path, record }) => {
       const result = await requestJson<GitHubBlobResponse>(
         this.request,
         `${REPOSITORY_PATH}/git/blobs`,
@@ -365,8 +399,24 @@ export class GitHubRepositoryClient {
       }
       return { path, mode: '100644', type: 'blob', sha: result.sha };
     });
+    const uploadedBlobs = await mapLimit(mediaFiles, 4, async ({ path, content, encoding }) => {
+      const result = await requestJson<GitHubBlobResponse>(
+        this.request,
+        `${REPOSITORY_PATH}/git/blobs`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, encoding }),
+        },
+      );
+      if (!result.sha || !COMMIT_SHA_PATTERN.test(result.sha)) {
+        throw new Error(`github_invalid_response:${path}`);
+      }
+      return { path, mode: '100644', type: 'blob', sha: result.sha };
+    });
     const treeEntries = [
-      ...blobs,
+      ...recordBlobs,
+      ...uploadedBlobs,
       ...removedPaths.map((path) => ({
         path,
         mode: '100644',

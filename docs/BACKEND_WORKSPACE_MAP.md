@@ -167,22 +167,21 @@ toolbar action definitions live in
 labels/content, class-name maps, child slots, repository target data, and event callbacks instead of
 embedding the backend route's text and CSS selectors in shared layout components.
 
-| Component                                       | Inputs and responsibility                                                             | State / behavior                                                                                       |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `WorkspacePageHeader`                           | Title, start/action slots, accessible label, class map                                | Renders the independent page header; optional inert state is caller-controlled.                        |
-| `WorkspaceFrame`                                | Panel children, accessible label, optional overlay and class map                      | Defines the frame and panels slot; caller controls inert state.                                        |
-| `WorkspacePanel`                                | Header/content/footer slots, optional overlay, layout mode, class map                 | Defines a panel's three regions; caller controls its inert state.                                      |
-| `WorkspaceActionButton`                         | Visible label, optional icon/status indicator, native button attributes and callback  | Native button behavior is supplied by props.                                                           |
-| `AnchoredDialog`                                | ID, accessible label, content, close callback, focus refs and optional modal behavior | Owns dialog focus setup/restoration, Escape, and optional Tab containment.                             |
-| `ActionToolbar`                                 | Accessible label, action definitions, class map                                       | Owns pointer-drag offset and click suppression; each action may provide a callback.                    |
-| `CardSummary` / `CardPreview` / `CardConnector` | Summary or preview data, icons, action list, labels, class maps                       | Preview owns its notes field; toolbar behavior is composed through `ActionToolbar`.                    |
-| `CarouselControls`                              | Ordered card items, active ID, labels, and selection callback                         | Renders wrapping previous/next controls and per-card indicators only for multi-card sets.              |
-| `GitHubSyncDialog`                              | Repository target, copy, close/test/save callbacks, class map                         | Owns the transient password-field value; it does not persist credentials or test GitHub access itself. |
+| Component                                       | Inputs and responsibility                                                             | State / behavior                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `WorkspacePageHeader`                           | Title, start/action slots, accessible label, class map                                | Renders the independent page header; optional inert state is caller-controlled.           |
+| `WorkspaceFrame`                                | Panel children, accessible label, optional overlay and class map                      | Defines the frame and panels slot; caller controls inert state.                           |
+| `WorkspacePanel`                                | Header/content/footer slots, optional overlay, layout mode, class map                 | Defines a panel's three regions; caller controls its inert state.                         |
+| `WorkspaceActionButton`                         | Visible label, optional icon/status indicator, native button attributes and callback  | Native button behavior is supplied by props.                                              |
+| `AnchoredDialog`                                | ID, accessible label, content, close callback, focus refs and optional modal behavior | Owns dialog focus setup/restoration, Escape, and optional Tab containment.                |
+| `ActionToolbar`                                 | Accessible label, action definitions, class map                                       | Owns pointer-drag offset and click suppression; each action may provide a callback.       |
+| `CardSummary` / `CardPreview` / `CardConnector` | Summary or preview data, icons, action list, labels, class maps                       | Preview owns its notes field; toolbar behavior is composed through `ActionToolbar`.       |
+| `CarouselControls`                              | Ordered card items, active ID, labels, and selection callback                         | Renders wrapping previous/next controls and per-card indicators only for multi-card sets. |
+| `GitHubSyncDialog`                              | Repository target, copy, close/test/save callbacks, class map                         | Owns transient password-field state and invokes the page's GitHub connection callbacks.   |
 
 The tree displays validated repository reads. Rename/reorder/create/delete interactions and editor
-fields remain local page-memory drafts until Save changes publishes the complete v2 snapshot; v1
-drafts remain local until migration. The separate card toolbar actions remain without handlers, and
-the GitHub Sync test callback only closes the dialog.
+fields remain local page-memory drafts until Save changes publishes the complete v2 snapshot. The
+separate card toolbar actions remain without handlers.
 
 ## Panel construction
 
@@ -294,16 +293,13 @@ The Select explorer is positioned absolutely against `.backend-workspace-contain
 both side-by-side workspace panels. `inset: -1px` extends it over the outer frame border; it has
 `z-index: 2`, a 1px border, 6px radius, 8px inset, and a 41px close button at top/right 4px. Its
 content contains a scrollable documentation tree loaded from a validated GitHub repository
-snapshot. The UI maps schema-v1 pages to a derived virtual `Cards` container and places that page's
-cards under it. For schema v2, persisted containers and card-container relationships are displayed
-directly. Virtual container IDs use the stable page ID as their key; they are not stored records or
-v2 migration IDs.
-An empty repository is shown as empty and the explorer remains available for local page drafts.
+schema-v2 snapshot. Persisted containers and card-container relationships are displayed directly.
+Legacy schema-v1 records are rejected rather than represented by virtual containers. An empty
+repository is shown as empty and the explorer remains available for local page drafts.
 
 The tree hierarchy is **page → card container → cards**, with nested pages using the same structure.
-Repository pages, nested pages, and cards populate the tree; the v1 adapter supplies one virtual
-container per page, while v2 records preserve persisted containers. Creating a local page or nested
-page also creates a default `Cards` container. The toolbar can add pages, nested pages, containers,
+Persisted schema-v2 pages, nested pages, containers, and cards populate the tree. Creating a local
+page or nested page also creates a default `Cards` container. The toolbar can add pages, nested pages, containers,
 and cards;
 containers can be added to a selected page and cards to a selected container. Every item uses the
 same `.backend-tree-row` panel surface. Disclosure and row-action controls are 26×26px at all
@@ -312,18 +308,18 @@ rename, moving up/down among siblings, and confirmed deletion; deleting a parent
 descendants. Selecting an item updates the card-editor preview behind the overlay, which can be
 seen after closing it. Child connectors use the shared CSS elbow and vertical-branch rules at every
 tree level; they are decorative, not separate data objects. The preview uses the shared
-container/card resolver for v1 virtual containers and persisted v2 containers. Selecting a card
+container/card resolver for persisted v2 containers. Selecting a card
 container previews its first card when available; selecting an empty container edits the container
 and shows an empty preview. Multi-card containers expose
 previous/next controls and one indicator per card. Changing the preview card also changes the
 selected record in the left editor. The editor covers name, category, card tag, and card content
 (or description for pages and containers). Draft fields are held in page memory by stable record
-ID, so switching cards preserves each card's draft; refresh discards them. Repository data is
-read-only; tree edits and editor drafts are local and are not written to GitHub. Loading and read
-errors are displayed explicitly, with a retry for read errors. For a schema-v2 snapshot, the editor
-offers Save changes; it validates and publishes the complete draft as one commit after checking the
-snapshot head. A changed branch is reported as a conflict and the local draft remains available.
-Schema-v1 drafts cannot be saved until the separately reviewed migration is applied.
+ID, so switching cards preserves each card's draft; refresh discards them. Repository changes are
+written only after Save changes. Loading and read errors are displayed explicitly, with a retry for
+read errors. The editor offers Save changes; it
+validates and publishes the complete v2 draft as one commit after checking the snapshot head. A
+changed branch is reported as a conflict and the local draft remains available. An empty repository
+opens without setup or migration UI; its first successful save writes the v2 manifest with content.
 
 The GitHub Sync dialog is a separate absolute overlay inside workspace panel 1, with `inset: 0`;
 workspace panel 2 is outside its bounds and remains unaffected. The overlay has its own
@@ -334,7 +330,8 @@ workspace panel 2 is outside its bounds and remains unaffected. The overlay has 
 - **Content:** read-only owner, repository, and branch inputs; a password-type PAT input; and a
   Connection Test Results card. The field rows use 41px-high inputs. The result card fills the
   remaining row space, and the content area clips overflow rather than scrolling.
-- **Footer:** Connection Test and disabled Save & Connect buttons.
+- **Footer:** Connection Test and Save & Connect, disabled until a non-empty PAT is entered or while
+  an operation is in progress.
 
 Its content grid is specifically `repeat(4, auto) minmax(120px, 1fr)`: the four field groups each
 take their intrinsic label/input height, and the final results card occupies the remaining
@@ -342,10 +339,10 @@ available row while remaining at least 120px tall. A 12px gap separates every co
 content box has 12px padding and clips excess content (`overflow: hidden`). Each field label is a
 grid with a 5px label-to-input gap. The inputs fill the available width and are 41px high.
 
-This is currently a visual scaffold, not a working connection flow. `GitHubSyncDialog` owns the
-password field's temporary component state, but the page does not wire the token to authentication
-or persistence. The Connection Test callback currently dismisses the dialog; it does not test a
-connection. Save & Connect is disabled.
+The dialog keeps the PAT transiently in component state and submits it to the auth provider for
+verification and tab-scoped session storage. Connection Test reads the configured live repository;
+it does not verify Git Contents write access or branch policy. Save & Connect verifies the PAT and
+initializes the authenticated session.
 
 ### Workspace panel 2: card-container preview
 

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CONTENT_SCHEMA_VERSION_V2,
-  type RepositorySnapshotResponse,
-  type RepositoryV1SnapshotResponse,
-} from '../lib/content';
+import { CONTENT_SCHEMA_VERSION_V2, type RepositorySnapshotResponse } from '../lib/content';
 import { explorerRecordsToV2Content } from './backendRepositoryContent';
+import { repositorySnapshotToExplorerRecords } from './backendRepositoryRecords';
 
 const pageId = '11111111-1111-4111-8111-111111111111';
 const containerId = '22222222-2222-4222-8222-222222222222';
@@ -80,6 +77,9 @@ describe('backend repository content serialization', () => {
         summary: 'Updated card content.',
         category: 'Platform revised',
         tag: '',
+        keyRule: 'Updated rule.',
+        code: 'npm ci',
+        spec: 'Updated spec.',
         parentTitle: 'Guides',
         parentCategory: 'Platform revised',
       },
@@ -98,9 +98,9 @@ describe('backend repository content serialization', () => {
       containerId,
       title: 'Install revised',
       definition: 'Updated card content.',
-      keyRule: 'Keep this rule.',
-      code: 'npm install',
-      spec: 'Keep this spec.',
+      keyRule: 'Updated rule.',
+      code: 'npm ci',
+      spec: 'Updated spec.',
       attachments: [],
     });
     expect(result.cards[0]).not.toHaveProperty('tag');
@@ -152,16 +152,29 @@ describe('backend repository content serialization', () => {
     expect(result.cards[0]?.containerId).toBe(result.containers[0]?.id);
   });
 
-  it('refuses to publish local records over a schema-v1 repository snapshot', () => {
-    const v1Snapshot: RepositoryV1SnapshotResponse = {
-      schemaVersion: 1,
-      sourceCommit: snapshot.sourceCommit,
-      repository: snapshot.repository,
-      pages: [],
-      cards: [],
+  it('round-trips typed remote media URLs from the selected card editor record', () => {
+    const audioAttachment = {
+      id: '44444444-4444-4444-8444-444444444444',
+      kind: 'audio' as const,
+      label: 'Install audio',
+      url: 'https://cdn.example.test/install.ogg',
+      mimeType: 'audio/ogg' as const,
     };
-    expect(() => explorerRecordsToV2Content([], v1Snapshot)).toThrow(
-      'repository_migration_required',
+    const snapshotWithAttachment: RepositorySnapshotResponse = {
+      ...snapshot,
+      cards: [{ ...snapshot.cards[0]!, attachments: [audioAttachment] }],
+    };
+    const records = repositorySnapshotToExplorerRecords(snapshotWithAttachment).map((record) =>
+      record.kind === 'card' ? { ...record, attachments: [audioAttachment] } : record,
     );
+
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'card', attachments: [audioAttachment] }),
+      ]),
+    );
+    expect(
+      explorerRecordsToV2Content(records, snapshotWithAttachment).cards[0]?.attachments,
+    ).toEqual([audioAttachment]);
   });
 });

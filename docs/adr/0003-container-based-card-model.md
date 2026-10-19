@@ -5,9 +5,9 @@
 
 ## Context
 
-The current v1 content model attaches cards directly to pages. That makes the backend tree's
-selectable unit ambiguous: the editor and preview need a stable object that groups a set of
-swappable cards, including when the set is empty. The desired hierarchy is:
+The original content model attached cards directly to pages, making the selectable unit
+ambiguous. The editor and preview need a stable object that groups swappable cards, including
+when the set is empty. The canonical hierarchy is:
 
 ```text
 Page
@@ -25,7 +25,7 @@ require a page to have one.
 
 ## Decision
 
-Introduce content schema v2 with explicit page, container, and card records:
+Use content schema v2 with explicit page, container, and card records:
 
 - Pages retain stable IDs, parent-page relationships, and page ordering.
 - Containers have stable IDs, an owning page ID, a title, and page-local ordering.
@@ -33,69 +33,50 @@ Introduce content schema v2 with explicit page, container, and card records:
   ID. Card identity, tag, text, and attachments remain card-owned.
 - A card container with no cards is valid.
 - Record identity is based on IDs, never titles or carousel positions.
-- The backend editor will keep unsaved drafts associated with their record IDs. Preview selection
-  must keep the editor's active-card context synchronized.
-- Preview and published/deployed routes should share content resolution and card rendering
-  semantics.
+- The backend editor keeps unsaved drafts associated with their record IDs. Preview selection
+  keeps the editor's active-card context synchronized.
+- Preview and published/deployed routes share content resolution and card rendering semantics.
+- Attachment edits stay on the owning card. Stored files use repository media blobs; remote media
+  URLs retain an explicit media kind and MIME type, while generic external URLs remain a separate
+  link kind.
 
-Schema v2 is additive. The repository reader, backend tree, and public renderer accept validated
-v1 and v2 snapshots. V1 pages/cards are projected onto UI-only virtual containers; v2 containers
-are loaded from their persisted records. The v1 projection is not persisted, and no migration or
-repository write is performed as part of normal reads.
-
-## Migration
-
-The explicit v1-to-v2 conversion creates one container titled `Cards` for each legacy page,
-including pages with no cards. It preserves page and card IDs and order, assigns each converted
-card to the container for its former page, and requires a caller-provided ID generator for new
-container IDs. The conversion is pure and validates both its legacy input and v2 result. It does
-not write to GitHub or alter repository files.
-
-The generated container IDs must be persisted as part of an explicitly reviewed migration before
-any future write path relies on them. Invalid legacy data, invalid or colliding generated IDs, or
-an invalid converted hierarchy fail explicitly; the application must not silently invent a
-fallback hierarchy during normal reads.
-
-The read-only migration planner requires an exact page-to-container ID mapping and a source commit
-SHA. It produces a deterministic, path-sorted list of replacement page/card files, added container
-files, and a `content/manifest.json` schema marker, with serialized v2 records and a count summary.
-The manifest keeps an empty repository distinguishable as v2 after the last page is removed. The
-plan is bound to the source commit so a future migration applier can reject a stale plan. Creating a plan
-performs no GitHub request or write; apply/rollback behavior requires a separate review and explicit
-authorization.
+Schema v2 is the only supported content model. The repository reader, backend tree, and public
+renderer accept validated v2 records; legacy v1 records are rejected instead of projected into
+virtual containers. There is no migration planner or migration UI. A repository with no content
+records is treated as an empty workspace so it can be populated directly. Its first successful
+save writes the v2 manifest with the content; any repository containing records must have a valid
+v2 manifest. This makes the active schema explicit as soon as content is published without
+requiring an empty-repository setup flow.
 
 ## Consequences
 
 - The tree can select a container independently from its cards.
 - Empty, single-card, and multi-card previews have an unambiguous selection unit.
-- The shared resolver orders cards by explicit order with stable ID tie-breaking for both v2
-  records and the v1 virtual-container projection. Backend and public pages share its selection
-  rules and carousel controls; empty and one-card containers do not show indicators.
+- The shared resolver orders cards by explicit order with stable ID tie-breaking for persisted v2
+  records. Backend and public pages share its selection rules and carousel controls; empty and
+  one-card containers do not show indicators.
 - Card content remains isolated by stable card ID, which allows per-record drafts when switching
   carousel slides.
-- The backend currently loads validated v1 or v2 repository snapshots. V1 pages receive UI-only
-  virtual containers; v2 containers retain their persisted IDs. The adapter is not a migration,
-  and tree/editor changes remain page-memory drafts that are not persisted.
-- Existing v1 repository content remains readable until a separately tested migration is applied.
+- The backend attachment carousel supports file upload and direct HTTPS media URLs. Uploaded media
+  blobs and card metadata are committed in the same validated, expected-head-checked tree; public
+  and backend previews share the same format-aware renderer.
+- The backend loads only validated v2 repository snapshots. Containers always have persisted IDs,
+  and tree/editor changes remain page-memory drafts until saved.
+- Legacy v1 records are not read or converted by the app. Repositories with existing legacy data
+  must be converted outside the application before use.
 - The v2 backend writer validates the complete resulting content, checks the expected head both
   before object creation and immediately before ref update, creates one tree and commit, and updates
-  the branch without force. It writes a v2 manifest so an empty repository retains its schema.
-  A stale head fails explicitly; the app does not silently retry or overwrite another writer. The
-  schema itself does not prevent concurrent Git edits.
-- The backend does not publish schema-v1 drafts. A separately reviewed migration must be applied
-  before legacy v1 content is editable through persistent saves.
+  the branch without force. A stale head fails explicitly; the app does not silently retry or
+  overwrite another writer. The schema itself does not prevent concurrent Git edits.
 
 ## Verification
 
-The v2 schema and conversion are tested for valid empty pages/containers, missing parents, missing
-containers, duplicate IDs, invalid IDs, and preservation of legacy page/card identity and card
-order. Shared preview resolution is tested for v2 records and virtual v1 containers, including
-empty, single-card, and multi-card sets, active-card selection, stable ordering, and invalid
+The v2 schema is tested for valid empty pages/containers, missing parents, missing containers,
+duplicate IDs, invalid IDs, and attachment validation. Shared preview resolution is tested for
+empty, single-card, and multi-card containers, active-card selection, stable ordering, and invalid
 references. Backend and public carousel behavior have interaction tests. The repository client
-validates both v1 and v2 snapshots, rejects mixed-version and broken v2 relationships, and keeps
-the v1 virtual-container projection read-only. The migration planner has deterministic-output,
-mapping-completeness, collision, source-revision, and resulting-schema tests. Applying a migration
-is outside this ADR's implementation. The v2 writer and backend save flow have mocked Git API
-coverage for complete-tree publication, deleted-record entries, non-force updates, stale heads,
-invalid data, preserved card fields, and local-draft retention after conflicts. No production
-repository write is performed by these tests.
+requires a v2 manifest whenever content records exist, treats a repository with no content records
+as an empty workspace, rejects legacy records, and validates v2 relationships. The v2 writer and
+backend save flow have mocked Git API coverage for complete-tree publication, deleted-record
+entries, non-force updates, stale heads, invalid data, preserved card fields, and local-draft
+retention after conflicts. No production repository write is performed by these tests.

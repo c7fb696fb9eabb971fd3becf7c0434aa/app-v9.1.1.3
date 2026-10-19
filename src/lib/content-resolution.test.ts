@@ -122,43 +122,44 @@ describe('container preview resolution', () => {
     );
   });
 
-  it('resolves virtual containers with the same ordering and selection rules', () => {
-    const containers = [{ id: 'virtual-container', title: 'Cards' }];
+  it('resolves persisted containers with stable ordering and selection rules', () => {
+    const containers = [{ id: 'persisted-container', title: 'Cards' }];
     const cards = [
-      { id: 'second', containerId: 'virtual-container', order: 1, title: 'Second' },
-      { id: 'first', containerId: 'virtual-container', order: 0, title: 'First' },
+      { id: 'second', containerId: 'persisted-container', order: 1, title: 'Second' },
+      { id: 'first', containerId: 'persisted-container', order: 0, title: 'First' },
     ];
 
-    expect(resolveCardContainer(containers, cards, 'virtual-container').cards).toEqual([
+    expect(resolveCardContainer(containers, cards, 'persisted-container').cards).toEqual([
       cards[1],
       cards[0],
     ]);
     expect(
-      resolveCardContainer(containers, cards, 'virtual-container', 'second').activeCard,
+      resolveCardContainer(containers, cards, 'persisted-container', 'second').activeCard,
     ).toEqual(cards[0]);
     expect(
       resolveCardContainer(
         containers,
         [
-          { id: 'z-card', containerId: 'virtual-container', order: 0, title: 'Z' },
-          { id: 'a-card', containerId: 'virtual-container', order: 0, title: 'A' },
+          { id: 'z-card', containerId: 'persisted-container', order: 0, title: 'Z' },
+          { id: 'a-card', containerId: 'persisted-container', order: 0, title: 'A' },
         ],
-        'virtual-container',
+        'persisted-container',
       ).cards.map((card) => card.id),
     ).toEqual(['a-card', 'z-card']);
     expect(() => resolveCardContainer(containers, cards, 'missing')).toThrow('container_not_found');
-    expect(() => resolveCardContainer(containers, cards, 'virtual-container', '')).toThrow(
+    expect(() => resolveCardContainer(containers, cards, 'persisted-container', '')).toThrow(
       'card_not_in_container',
     );
   });
 
-  it('adapts a legacy repository page into an empty or ordered container preview', () => {
+  it('returns no container previews for a v2 page without persisted containers', () => {
     const snapshot: RepositorySnapshotResponse = {
+      schemaVersion: CONTENT_SCHEMA_VERSION_V2,
       sourceCommit: 'a'.repeat(40),
       repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
       pages: [
         {
-          schemaVersion: 1,
+          schemaVersion: CONTENT_SCHEMA_VERSION_V2,
           id: pageId,
           title: 'Platform',
           slug: 'platform',
@@ -166,41 +167,13 @@ describe('container preview resolution', () => {
           order: 0,
         },
       ],
-      cards: [
-        {
-          schemaVersion: 1,
-          id: secondCardId,
-          pageId,
-          order: 1,
-          title: 'Second card',
-          definition: 'Second card content.',
-          attachments: [],
-        },
-        {
-          schemaVersion: 1,
-          id: firstCardId,
-          pageId,
-          order: 0,
-          title: 'First card',
-          definition: 'First card content.',
-          attachments: [],
-        },
-      ],
+      containers: [],
+      cards: [],
     };
 
-    expect(
-      resolveRepositoryPagePreviews(snapshot, pageId)[0]?.cards.map((card) => card.id),
-    ).toEqual([firstCardId, secondCardId]);
-    const virtualContainerId = `repository-container:${pageId}`;
-    expect(
-      resolveRepositoryPagePreviews(snapshot, pageId, { [virtualContainerId]: secondCardId })[0]
-        ?.activeCard?.id,
-    ).toBe(secondCardId);
+    expect(resolveRepositoryPagePreviews(snapshot, pageId)).toEqual([]);
     expect(() =>
-      resolveRepositoryPagePreviews(
-        { ...snapshot, cards: [] },
-        '66666666-6666-4666-8666-666666666666',
-      ),
+      resolveRepositoryPagePreviews(snapshot, '66666666-6666-4666-8666-666666666666'),
     ).toThrow('page_not_found');
   });
 

@@ -1,6 +1,5 @@
 import type {
   CardContainerRecordV2,
-  CardRecord,
   CardRecordV2,
   ContentRecordsV2,
   RepositorySnapshotResponse,
@@ -68,56 +67,18 @@ export function resolveContainerPreview(
   return resolveCardContainer(records.containers, records.cards, containerId, activeCardId);
 }
 
-export function virtualContainerIdForPage(pageId: string): string {
-  return `repository-container:${pageId}`;
-}
-
-type RepositoryPageContainer = {
-  id: string;
-  pageId: string;
-  title: string;
-  order: number;
-};
-
-type RepositoryPreviewCard = (CardRecord | CardRecordV2) & {
-  containerId: string;
-};
-
 export function resolveRepositoryPagePreviews(
   snapshot: RepositorySnapshotResponse,
   pageId: string,
   activeCardIds: Readonly<Record<string, string | null>> = {},
-): ContainerPreview<RepositoryPageContainer, RepositoryPreviewCard>[] {
+): ContainerPreview<CardContainerRecordV2, CardRecordV2>[] {
   if (!snapshot.pages.some((item) => item.id === pageId)) throw new Error('page_not_found');
 
-  const containers: RepositoryPageContainer[] =
-    snapshot.schemaVersion === 2
-      ? snapshot.containers
-          .filter((item) => item.pageId === pageId)
-          .map(({ id, pageId: ownerPageId, title, order }) => ({
-            id,
-            pageId: ownerPageId,
-            title,
-            order,
-          }))
-      : [
-          {
-            id: virtualContainerIdForPage(pageId),
-            pageId,
-            title: 'Cards',
-            order: 0,
-          },
-        ];
-
-  return containers
+  return snapshot.containers
+    .filter((item) => item.pageId === pageId)
     .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
     .map((container) => {
-      const cards: RepositoryPreviewCard[] =
-        snapshot.schemaVersion === 2
-          ? snapshot.cards.filter((card) => card.containerId === container.id)
-          : snapshot.cards
-              .filter((card) => card.pageId === pageId)
-              .map((card) => ({ ...card, containerId: container.id }));
+      const cards = snapshot.cards.filter((card) => card.containerId === container.id);
       return resolveCardContainer(
         [container],
         cards,

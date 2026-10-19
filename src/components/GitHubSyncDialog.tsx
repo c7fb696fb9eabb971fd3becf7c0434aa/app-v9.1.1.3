@@ -33,22 +33,27 @@ export type GitHubSyncCopy = {
 };
 
 function connectionErrorMessage(cause: unknown, fallback: string): string {
-  const code = cause instanceof Error ? cause.message : '';
+  const [code = '', ...diagnosticParts] = cause instanceof Error ? cause.message.split(':') : [];
+  const diagnostic = diagnosticParts.join(':').trim();
+  const withDiagnostic = (message: string) =>
+    diagnostic ? `${message} GitHub request: ${diagnostic}.` : message;
   switch (code) {
     case 'github_token_invalid':
-      return 'GitHub rejected this token. Check it and try again.';
+      return withDiagnostic('GitHub rejected this token. Check it and try again.');
     case 'github_permission_denied':
-      return 'This token cannot access the configured repository.';
+      return withDiagnostic('This token cannot access the configured repository.');
     case 'repository_write_denied':
-      return 'The token can access the repository but does not have write permission.';
+      return withDiagnostic(
+        'The token can access the repository but does not have write permission.',
+      );
     case 'github_rate_limited':
-      return 'GitHub is rate-limiting requests. Try again shortly.';
+      return withDiagnostic('GitHub is rate-limiting requests. Try again shortly.');
     case 'github_unavailable':
       return 'GitHub could not be reached. Check your connection and try again.';
     case 'github_session_storage_unavailable':
       return 'The browser could not store this session. Check browser storage settings.';
     default:
-      return code ? `${fallback} (${code})` : fallback;
+      return code ? withDiagnostic(`${fallback} (${code})`) : fallback;
   }
 }
 

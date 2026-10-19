@@ -6,11 +6,12 @@ import {
 } from './backendRepositoryRecords';
 
 const snapshot: RepositorySnapshotResponse = {
+  schemaVersion: 2,
   sourceCommit: 'a'.repeat(40),
   repository: { owner: 'docs-owner', name: 'docs-repo', branch: 'main' },
   pages: [
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: '11111111-1111-4111-8111-111111111111',
       title: 'Parent',
       slug: 'parent',
@@ -19,7 +20,7 @@ const snapshot: RepositorySnapshotResponse = {
       description: 'Parent description.',
     },
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: '22222222-2222-4222-8222-222222222222',
       title: 'Nested',
       slug: 'nested',
@@ -27,7 +28,7 @@ const snapshot: RepositorySnapshotResponse = {
       order: 0,
     },
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: '33333333-3333-4333-8333-333333333333',
       title: 'Empty',
       slug: 'empty',
@@ -35,22 +36,48 @@ const snapshot: RepositorySnapshotResponse = {
       order: 1,
     },
   ],
+  containers: [
+    {
+      schemaVersion: 2,
+      id: '77777777-7777-4777-8777-777777777777',
+      pageId: '11111111-1111-4111-8111-111111111111',
+      title: 'Parent Cards',
+      order: 0,
+    },
+    {
+      schemaVersion: 2,
+      id: '88888888-8888-4888-8888-888888888888',
+      pageId: '22222222-2222-4222-8222-222222222222',
+      title: 'Nested Cards',
+      order: 0,
+    },
+    {
+      schemaVersion: 2,
+      id: '99999999-9999-4999-8999-999999999999',
+      pageId: '33333333-3333-4333-8333-333333333333',
+      title: 'Empty Cards',
+      order: 0,
+    },
+  ],
   cards: [
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: '44444444-4444-4444-8444-444444444444',
-      pageId: '11111111-1111-4111-8111-111111111111',
+      containerId: '77777777-7777-4777-8777-777777777777',
       order: 0,
       title: 'Card',
       tag: 'Tag',
       definition: 'Card definition.',
+      keyRule: 'Preserve this rule.',
+      code: 'npm install',
+      spec: 'Node 24.',
       attachments: [],
     },
   ],
 };
 
 describe('repository snapshot explorer records', () => {
-  it('maps pages, nested pages, and legacy page cards into stable virtual containers', () => {
+  it('maps pages, nested pages, persisted containers, and cards into the explorer hierarchy', () => {
     const first = repositorySnapshotToExplorerRecords(snapshot);
     const second = repositorySnapshotToExplorerRecords(snapshot);
 
@@ -68,28 +95,29 @@ describe('repository snapshot explorer records', () => {
           parentId: '11111111-1111-4111-8111-111111111111',
         }),
         expect.objectContaining({
-          id: 'repository-container:11111111-1111-4111-8111-111111111111',
+          id: '77777777-7777-4777-8777-777777777777',
           kind: 'container',
-          title: 'Cards',
+          title: 'Parent Cards',
           parentId: '11111111-1111-4111-8111-111111111111',
-          order: 1,
+          order: 0,
         }),
         expect.objectContaining({
           id: '44444444-4444-4444-8444-444444444444',
           kind: 'card',
-          parentId: 'repository-container:11111111-1111-4111-8111-111111111111',
+          parentId: '77777777-7777-4777-8777-777777777777',
           summary: 'Card definition.',
           tag: 'Tag',
+          keyRule: 'Preserve this rule.',
+          code: 'npm install',
+          spec: 'Node 24.',
         }),
         expect.objectContaining({
-          id: 'repository-container:33333333-3333-4333-8333-333333333333',
+          id: '99999999-9999-4999-8999-999999999999',
           kind: 'container',
         }),
       ]),
     );
-    expect(defaultExplorerSelection(first)).toBe(
-      'repository-container:11111111-1111-4111-8111-111111111111',
-    );
+    expect(defaultExplorerSelection(first)).toBe('77777777-7777-4777-8777-777777777777');
   });
 
   it('provides no default selection for an empty repository', () => {
@@ -98,6 +126,7 @@ describe('repository snapshot explorer records', () => {
         repositorySnapshotToExplorerRecords({
           ...snapshot,
           pages: [],
+          containers: [],
           cards: [],
         }),
       ),

@@ -234,7 +234,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (pat: string) => {
       const candidate = pat.trim();
       if (!candidate) throw new Error('github_token_invalid');
-      clearAuth();
       setSessionRestoreError(false);
       setIsCheckingSession(true);
       try {
@@ -250,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsCheckingSession(false);
       }
     },
-    [clearAuth],
+    [],
   );
 
   const logout = useCallback(() => {

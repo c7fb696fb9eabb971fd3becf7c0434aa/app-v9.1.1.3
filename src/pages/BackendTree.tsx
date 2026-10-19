@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../components/Primitives';
 import { Icon, IconButton } from '../components/Icon';
 import { AnchoredDialog } from '../components/Workspace';
+import type { Attachment } from '../lib/content';
 
 type ExplorerPage = {
   id: string;
@@ -32,6 +33,10 @@ type ExplorerCard = {
   summary: string;
   category: string;
   tag?: string;
+  keyRule?: string;
+  code?: string;
+  spec?: string;
+  attachments?: Attachment[];
   parentTitle: string;
   parentCategory: string;
 };
