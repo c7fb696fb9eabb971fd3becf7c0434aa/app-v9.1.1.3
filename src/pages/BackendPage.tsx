@@ -426,7 +426,23 @@ export function BackendPage() {
                 </div>
               ) : records.length === 0 ? (
                 <div className="backend-editor-empty">
-                  This repository has no pages yet. Use Select to create a local draft page.
+                  <p>This repository has no pages yet. Use Select to create a local draft page.</p>
+                  {saveError && (
+                    <p className="status-message status-error" role="alert">
+                      {saveError}
+                    </p>
+                  )}
+                  {saveStatus && <p role="status">{saveStatus}</p>}
+                  {hasUnsavedChanges && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={() => void saveChanges()}
+                      disabled={isSaving || loading}
+                    >
+                      {isSaving ? 'Saving…' : 'Save changes'}
+                    </Button>
+                  )}
                 </div>
               ) : editorRecord ? (
                 <form

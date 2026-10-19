@@ -705,6 +705,47 @@ describe('BackendPage', () => {
     expect(publishV2Snapshot).not.toHaveBeenCalled();
   });
 
+  it('allows saving after deleting the last page and its nested records', async () => {
+    const emptySnapshot = {
+      schemaVersion: 2 as const,
+      sourceCommit: 'b'.repeat(40),
+      pages: [],
+      containers: [],
+      cards: [],
+      repository: repositorySnapshot.repository,
+    };
+    readSnapshot.mockResolvedValueOnce(repositorySnapshot).mockResolvedValueOnce(emptySnapshot);
+    publishV2Snapshot.mockResolvedValue({ commitSha: 'c'.repeat(40) });
+    render(
+      <MemoryRouter>
+        <BackendPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('form', { name: 'Selected record editor' });
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+
+    for (const title of ['Machine Learning', 'Platform Guide']) {
+      const row = screen
+        .getByRole('button', { name: `${title} Page` })
+        .closest('li');
+      expect(row).not.toBeNull();
+      fireEvent.click(within(row!).getByRole('button', { name: `Delete ${title}` }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    }
+
+    expect(screen.getByText(/This repository has no pages yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText(/Saved as commit ccccccc/)).toBeInTheDocument();
+    expect(publishV2Snapshot).toHaveBeenCalledWith(
+      { schemaVersion: 2, pages: [], containers: [], cards: [] },
+      repositorySnapshot.sourceCommit,
+      undefined,
+      [],
+    );
+  });
+
   it('reports repository read errors and allows retrying the read', async () => {
     readSnapshot
       .mockRejectedValueOnce(new Error('github_permission_denied'))
