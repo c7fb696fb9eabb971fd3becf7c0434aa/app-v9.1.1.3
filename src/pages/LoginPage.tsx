@@ -36,7 +36,6 @@ export function LoginPage() {
         errorMessages[errorCode] ?? 'GitHub verification failed. Check access and try again.',
       );
     } finally {
-      setPat('');
       setIsSubmitting(false);
     }
   }
