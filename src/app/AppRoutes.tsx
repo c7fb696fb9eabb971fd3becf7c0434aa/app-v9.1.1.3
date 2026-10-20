@@ -42,8 +42,7 @@ export function AppRoutes() {
   const { pathname } = useLocation();
   const normalizedPathname = pathname.replace(/\/+$/, '') || APP_ROUTES.publicHome;
   const isDocumentationHome =
-    normalizedPathname === APP_ROUTES.home ||
-    normalizedPathname.startsWith(`${APP_ROUTES.home}/`);
+    normalizedPathname === APP_ROUTES.home || normalizedPathname.startsWith(`${APP_ROUTES.home}/`);
   const mainContentClass = isDocumentationHome ? 'main-content main-content-home' : 'main-content';
 
   if (normalizedPathname === APP_ROUTES.backend) {
