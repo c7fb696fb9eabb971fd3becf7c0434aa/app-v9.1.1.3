@@ -109,22 +109,28 @@ describe('HomePage', () => {
   it('lists root pages and navigates nested pages at their own URLs', async () => {
     renderHome();
 
-    expect(await screen.findByRole('heading', { name: 'Home' })).toBeVisible();
+    expect(await screen.findByRole('navigation', { name: 'Current location' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Home' })).not.toBeInTheDocument();
     const rootLink = await screen.findByRole('link', { name: /vscode/ });
     expect(rootLink).toHaveAttribute('href', '/home/vscode');
     expect(screen.queryByRole('link', { name: /environment/ })).not.toBeInTheDocument();
 
     fireEvent.click(rootLink);
-    expect(await screen.findByRole('heading', { name: 'vscode' })).toBeVisible();
+    expect(await screen.findByRole('navigation', { name: 'Current location' })).toHaveTextContent(
+      'vscode',
+    );
+    expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /environment/ })).toHaveAttribute(
       'href',
       '/home/vscode/environment',
     );
-    expect(screen.queryByRole('heading', { name: 'environment' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('link', { name: /environment/ }));
-    expect(await screen.findByRole('heading', { name: 'environment' })).toBeVisible();
-    expect(screen.getByText('Environment documentation.')).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Current location' })).toHaveTextContent(
+      'environment',
+    );
+    expect(screen.queryByRole('heading', { name: 'environment' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Environment documentation.')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'review' })).toHaveAttribute(
       'href',
       '/home/vscode/environment/review',
@@ -159,13 +165,20 @@ describe('HomePage', () => {
     expect(container.querySelector('.published-card-preview')).toBeNull();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(container.querySelector('.public-card-toolbar')).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.getByRole('heading', { name: 'code' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'code' })).not.toBeInTheDocument();
+    expect(container.querySelector('.public-card-category')).toBeNull();
+    expect(container.querySelector('.public-page-summary')).toBeNull();
+    expect(container.querySelector('.public-page-description')).toBeNull();
+    expect(container.querySelector('.public-container-title')).toBeNull();
   });
 
   it('does not include cards from nested pages in a parent page', async () => {
     renderHome('/home/vscode');
 
-    expect(await screen.findByRole('heading', { name: 'vscode' })).toBeVisible();
+    expect(await screen.findByRole('navigation', { name: 'Current location' })).toHaveTextContent(
+      'vscode',
+    );
+    expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
     expect(screen.queryByText('Review checklist content.')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /environment/ })).toBeInTheDocument();
   });
@@ -247,7 +260,10 @@ describe('HomePage', () => {
 
   it('normalizes trailing slashes on public page routes', async () => {
     renderHome('/home/vscode/environment/');
-    expect(await screen.findByRole('heading', { name: 'environment' })).toBeVisible();
+    expect(await screen.findByRole('navigation', { name: 'Current location' })).toHaveTextContent(
+      'environment',
+    );
+    expect(screen.queryByRole('heading', { name: 'environment' })).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull(),
     );

@@ -226,7 +226,6 @@ function PublishedCard({
           <Heading>
             <Link to={getCardPath(card, page, snapshot)}>{card.title}</Link>
           </Heading>
-          <span className="public-card-category">{page.title}</span>
         </div>
         <div className="public-card-body">
           <p>{card.definition}</p>
@@ -260,34 +259,13 @@ function PublishedCard({
   );
 }
 
-function PageSummary({
-  page,
-  parent,
-  id,
-}: {
-  page: PageRecordV2;
-  parent: PageRecordV2 | null;
-  id: string;
-}) {
-  return (
-    <header className="public-page-summary">
-      <Icon name="promptContinue" size={14} />
-      <h1 id={id}>{page.title}</h1>
-      <span>{parent?.title ?? 'Documentation'}</span>
-    </header>
-  );
-}
-
 function PageLink({ page, pages }: { page: PageRecordV2; pages: readonly PageRecordV2[] }) {
-  const parent = page.parentId ? pages.find((candidate) => candidate.id === page.parentId) : null;
   return (
     <Link className="public-page-link" to={getPagePath(page, pages)}>
       <span className="public-page-link-heading">
         <Icon name="promptContinue" size={14} />
         <strong>{page.title}</strong>
-        <span>{parent?.title ?? 'Documentation'}</span>
       </span>
-      {page.description && <span className="public-page-link-description">{page.description}</span>}
     </Link>
   );
 }
@@ -381,9 +359,6 @@ export function HomePage() {
     [normalizedPathname, snapshot],
   );
   const selectedPage = route?.page ?? null;
-  const parentPage = selectedPage?.parentId
-    ? (snapshot?.pages.find((page) => page.id === selectedPage.parentId) ?? null)
-    : null;
   const childPages = selectedPage
     ? (snapshot?.pages
         .filter((page) => page.parentId === selectedPage.id)
@@ -415,7 +390,6 @@ export function HomePage() {
         )}
         {!loading && !error && snapshot && normalizedPathname === '/home' && (
           <div className="public-page-index" aria-label="Documentation pages">
-            <h1>Home</h1>
             {rootPages.map((page) => (
               <PageLink key={page.id} page={page} pages={snapshot.pages} />
             ))}
@@ -427,15 +401,7 @@ export function HomePage() {
           selectedPage &&
           pageForCard === null &&
           !cardNotFound && (
-            <article className="public-page" aria-labelledby={`public-page-${selectedPage.id}`}>
-              <PageSummary
-                page={selectedPage}
-                parent={parentPage}
-                id={`public-page-${selectedPage.id}`}
-              />
-              {selectedPage.description && (
-                <p className="public-page-description">{selectedPage.description}</p>
-              )}
+            <article className="public-page" aria-label={selectedPage.title}>
               {childPages.length > 0 && (
                 <nav
                   className="public-page-children"
@@ -446,13 +412,12 @@ export function HomePage() {
                   ))}
                 </nav>
               )}
-              {containers.map(({ record, cards }) => (
+              {containers.map(({ record, cards }, index) => (
                 <section
                   className="public-container"
                   key={record.id}
-                  aria-label={`Cards in ${record.title}`}
+                  aria-label={`Card group ${index + 1} on ${selectedPage.title}`}
                 >
-                  {record.title && <h2 className="public-container-title">{record.title}</h2>}
                   {cards.length === 0 ? (
                     <p className="public-card-empty">No cards in this container yet.</p>
                   ) : (

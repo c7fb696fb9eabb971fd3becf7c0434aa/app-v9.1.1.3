@@ -328,15 +328,10 @@ input:focus-visible {
   display: grid;
   gap: 20px;
 }
-.public-page-index > h1 {
-  margin: 0;
-  font-size: clamp(24px, 4vw, 34px);
-}
 .public-page-link {
   display: grid;
-  gap: 12px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
@@ -347,37 +342,18 @@ input:focus-visible {
   border-color: var(--accent-deep);
   background: var(--surface-raised);
 }
-.public-page-link-heading,
-.public-page-summary {
+.public-page-link-heading {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
-.public-page-link-heading strong,
-.public-page-summary h1 {
+.public-page-link-heading strong {
   min-width: 0;
-  margin: 0;
   overflow-wrap: anywhere;
   color: var(--text-strong);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-}
-.public-page-link-heading > span:last-child,
-.public-page-summary > span {
-  margin-left: auto;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 11px;
-  text-align: right;
-}
-.public-page-link-description,
-.public-page-description {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.6;
 }
 .public-page-children {
   display: grid;
@@ -389,12 +365,6 @@ input:focus-visible {
   display: grid;
   min-width: 0;
   gap: 12px;
-}
-.public-container-title {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 500;
 }
 .public-card {
   display: grid;
@@ -441,15 +411,6 @@ input:focus-visible {
 }
 .public-card-heading a:hover {
   color: var(--accent-bright);
-}
-.public-card-category {
-  margin-left: auto;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 11px;
-  text-align: right;
 }
 .public-card-body {
   min-width: 0;
@@ -1015,15 +976,8 @@ input:focus-visible {
     width: calc(100% - 24px);
   }
   .public-page-link-heading,
-  .public-page-summary,
   .public-card-heading {
     align-items: flex-start;
-  }
-  .public-page-link-heading > span:last-child,
-  .public-page-summary > span,
-  .public-card-category {
-    max-width: 34%;
-    overflow-wrap: anywhere;
   }
   .login-main {
     width: min(100% - 24px, 1520px);

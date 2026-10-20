@@ -171,7 +171,9 @@ describe('public route and drawer', () => {
         target: { value: 'synthetic-test-token' },
       });
       fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
-      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('navigation', { name: 'Current location' }),
+      ).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Go to backend route' }));
 
       expect(await screen.findByRole('banner', { name: 'Backend header' })).toBeVisible();
@@ -297,7 +299,7 @@ describe('public route and drawer', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
 
-      expect(await screen.findByRole('heading', { name: 'Home' })).toBeVisible();
+      expect(await screen.findByRole('navigation', { name: 'Current location' })).toBeVisible();
       expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
       expect(
         screen.queryByText('No documentation pages have been published yet.'),
@@ -306,14 +308,16 @@ describe('public route and drawer', () => {
       expect(rootPageLink).toHaveAttribute('href', '/home/getting-started');
       fireEvent.click(rootPageLink);
       expect(
-        await screen.findByRole('heading', { name: 'Getting started', level: 1 }),
+        await screen.findByRole('navigation', { name: 'Current location' }),
       ).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Getting started' })).not.toBeInTheDocument();
       const childPageLink = screen.getByRole('link', { name: /Installation/ });
       expect(childPageLink).toHaveAttribute('href', '/home/getting-started/installation');
       fireEvent.click(childPageLink);
       expect(
-        await screen.findByRole('heading', { name: 'Installation', level: 1 }),
+        await screen.findByRole('navigation', { name: 'Current location' }),
       ).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Installation' })).not.toBeInTheDocument();
       const cardLink = screen.getByRole('link', { name: 'Install the app' });
       expect(cardLink).toHaveAttribute(
         'href',
@@ -417,7 +421,9 @@ describe('public route and drawer', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
 
-      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('navigation', { name: 'Current location' }),
+      ).toBeInTheDocument();
       expect(window.sessionStorage.getItem('greendocs.github.pat')).toBe('synthetic-test-token');
       expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -467,7 +473,9 @@ describe('public route and drawer', () => {
     vi.stubGlobal('fetch', fetchMock);
     try {
       renderAt('/home');
-      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('navigation', { name: 'Current location' }),
+      ).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'GreenDocs' })).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
