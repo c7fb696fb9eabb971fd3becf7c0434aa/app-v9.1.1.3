@@ -114,6 +114,12 @@ describe('public route and drawer', () => {
     expect(screen.queryByRole('heading', { name: /welcome/i })).not.toBeInTheDocument();
   });
 
+  it('protects nested page and card routes from signed-out visitors', async () => {
+    renderAt('/home/vscode/environment/review');
+    expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'review' })).not.toBeInTheDocument();
+  });
+
   it('protects /backend from signed-out visitors', async () => {
     renderAt('/backend');
     expect(await screen.findByRole('heading', { name: 'GreenDocs' })).toBeInTheDocument();
@@ -296,9 +302,27 @@ describe('public route and drawer', () => {
       expect(
         screen.queryByText('No documentation pages have been published yet.'),
       ).not.toBeInTheDocument();
-      expect(await screen.findByRole('heading', { name: 'Getting started' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Installation' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Install the app' })).toBeInTheDocument();
+      const rootPageLink = await screen.findByRole('link', { name: /Getting started/ });
+      expect(rootPageLink).toHaveAttribute('href', '/home/getting-started');
+      fireEvent.click(rootPageLink);
+      expect(
+        await screen.findByRole('heading', { name: 'Getting started', level: 1 }),
+      ).toBeInTheDocument();
+      const childPageLink = screen.getByRole('link', { name: /Installation/ });
+      expect(childPageLink).toHaveAttribute('href', '/home/getting-started/installation');
+      fireEvent.click(childPageLink);
+      expect(
+        await screen.findByRole('heading', { name: 'Installation', level: 1 }),
+      ).toBeInTheDocument();
+      const cardLink = screen.getByRole('link', { name: 'Install the app' });
+      expect(cardLink).toHaveAttribute(
+        'href',
+        '/home/getting-started/installation/install-the-app',
+      );
+      fireEvent.click(cardLink);
+      expect(
+        await screen.findByRole('heading', { name: 'Install the app', level: 1 }),
+      ).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
       const rightBrand = within(screen.getByRole('dialog', { name: 'Right navigation' })).getByRole(
         'link',

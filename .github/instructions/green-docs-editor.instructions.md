@@ -36,9 +36,9 @@ The preview should never silently own a different active-card state than the edi
 
 ## Preview vs published rendering
 
-The backend workspace preview and the public/published view must both use the same content-resolution logic. Do not create separate ad hoc preview rules for the editor that diverge from the public rendering path.
+The backend workspace preview exists so authors can inspect how pages, nested pages, and cards will look while editing. It is a visual reference, not a shared implementation or runtime dependency for the published view.
 
-The backend preview is also the visual contract for published content. Reuse its page/container summary and card-preview presentation on the public view, including card fields, attachments, carousel, toolbar, and notes. Keep page, nested-page, container, and card boundaries visible in the published hierarchy; do not replace previewed cards with a simplified article layout.
+The published view must render and navigate independently. Reuse content schemas and shared data-resolution rules where appropriate, but do not import preview/editor components, editor state, carousel behavior, or toolbar configuration into the public view. Every page and nested page has its own URL; containers organize cards but do not add a URL segment. Cards should follow the agreed visual layout while using public-view components and behavior.
 
 ## Verification gate before live repo work
 

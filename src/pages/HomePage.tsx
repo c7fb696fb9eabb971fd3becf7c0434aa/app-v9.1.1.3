@@ -1,143 +1,294 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { type PageRecordV2, type RepositorySnapshotResponse } from '../lib/content';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  assetExtensionForMimeType,
+  CONTENT_LIMITS,
+  type Attachment,
+  type CardContainerRecordV2,
+  type CardRecordV2,
+  type PageRecordV2,
+  type RepositorySnapshotResponse,
+} from '../lib/content';
 import { useAuth } from '../features/auth';
 import { createGitHubRepositoryClient } from '../features/github';
-import { Button, CardConnector, CardPreview, CardSummary, CarouselControls } from '../components';
-import { resolveRepositoryPagePreviews } from '../lib/content-resolution';
-import { backendWorkspaceCopy, cardToolbarActions } from './backendWorkspaceConfig';
+import { Button } from '../components/Primitives';
+import { Icon, type IconName } from '../components/Icon';
 
-type RepositoryPageRecord = PageRecordV2;
-
-type PageNode = RepositoryPageRecord & {
-  children: PageNode[];
+type PageBreadcrumb = {
+  id: string;
+  title: string;
+  path: string;
 };
 
-function buildPageTree(pages: readonly RepositoryPageRecord[]): PageNode[] {
-  const nodes = new Map(pages.map((page) => [page.id, { ...page, children: [] as PageNode[] }]));
-  const roots: PageNode[] = [];
-  for (const node of nodes.values()) {
-    if (node.parentId) nodes.get(node.parentId)?.children.push(node);
-    else roots.push(node);
-  }
-  const sort = (items: PageNode[]) => {
-    items.sort((left, right) => left.order - right.order || left.slug.localeCompare(right.slug));
-    items.forEach((item) => sort(item.children));
-  };
-  sort(roots);
-  return roots;
+type PublishedContainer = {
+  record: CardContainerRecordV2;
+  cards: CardRecordV2[];
+};
+
+const PUBLIC_CARD_TOOL_ICONS: readonly IconName[] = [
+  'cardPreview',
+  'cardFiles',
+  'cardVideo',
+  'cardLayout',
+  'cardTerminal',
+  'cardWorkflow',
+  'cardBookmark',
+  'cardDuplicate',
+  'cardShare',
+  'cardCode',
+  'cardPrint',
+  'cardSettings',
+  'publish',
+  'verified',
+  'attachPdf',
+];
+
+function slugFromTitle(title: string): string {
+  const slug = title
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, CONTENT_LIMITS.titleCharacters)
+    .replace(/-+$/g, '');
+  return slug || 'card';
 }
 
-function PageView({
+function getPagePath(page: PageRecordV2, pages: readonly PageRecordV2[]): string {
+  const segments = [page.slug];
+  let current = page;
+  while (current.parentId) {
+    const parent = pages.find((candidate) => candidate.id === current.parentId);
+    if (!parent) throw new Error('page_parent_missing');
+    segments.unshift(parent.slug);
+    current = parent;
+  }
+  return `/home/${segments.map(encodeURIComponent).join('/')}`;
+}
+
+function getCardPath(
+  card: CardRecordV2,
+  page: PageRecordV2,
+  snapshot: RepositorySnapshotResponse,
+): string {
+  const pageContainers = snapshot.containers.filter((container) => container.pageId === page.id);
+  const pageCards = snapshot.cards.filter((candidate) =>
+    pageContainers.some((container) => container.id === candidate.containerId),
+  );
+  const segment = slugFromTitle(card.title);
+  const segmentIsAmbiguous =
+    pageCards.filter((candidate) => slugFromTitle(candidate.title) === segment).length > 1 ||
+    snapshot.pages.some(
+      (candidate) => candidate.parentId === page.id && candidate.slug === segment,
+    );
+  const cardSegment = segmentIsAmbiguous ? `${segment}-${card.id}` : segment;
+  return `${getPagePath(page, snapshot.pages)}/${encodeURIComponent(cardSegment)}`;
+}
+
+function resolvePublicRoute(
+  pathname: string,
+  snapshot: RepositorySnapshotResponse,
+): { page: PageRecordV2 | null; card: CardRecordV2 | null; breadcrumbs: PageBreadcrumb[] } {
+  let segments: string[];
+  try {
+    segments = pathname
+      .replace(/^\/home\/?/, '')
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment));
+  } catch {
+    return { page: null, card: null, breadcrumbs: [] };
+  }
+  if (segments.length === 0) return { page: null, card: null, breadcrumbs: [] };
+
+  let parentId: string | null = null;
+  const matchedPages: PageRecordV2[] = [];
+  for (const segment of segments) {
+    const nextPage = snapshot.pages.find(
+      (candidate) => candidate.parentId === parentId && candidate.slug === segment,
+    );
+    if (!nextPage) break;
+    matchedPages.push(nextPage);
+    parentId = nextPage.id;
+  }
+  const breadcrumbs = matchedPages.map((page) => ({
+    id: page.id,
+    title: page.title,
+    path: getPagePath(page, snapshot.pages),
+  }));
+
+  if (matchedPages.length === segments.length) {
+    return { page: matchedPages.at(-1) ?? null, card: null, breadcrumbs };
+  }
+
+  const selectedPage = matchedPages.at(-1) ?? null;
+  const cardSegment = segments[matchedPages.length];
+  if (!selectedPage || segments.length !== matchedPages.length + 1 || !cardSegment) {
+    return { page: null, card: null, breadcrumbs: [] };
+  }
+  const containers = snapshot.containers.filter(
+    (container) => container.pageId === selectedPage.id,
+  );
+  const cards = snapshot.cards.filter((card) =>
+    containers.some((container) => container.id === card.containerId),
+  );
+  const selectedCard = cards.find(
+    (card) => getCardPath(card, selectedPage, snapshot).split('/').at(-1) === cardSegment,
+  );
+  return { page: selectedPage, card: selectedCard ?? null, breadcrumbs };
+}
+
+function cardsForPage(
+  page: PageRecordV2,
+  snapshot: RepositorySnapshotResponse,
+): PublishedContainer[] {
+  return snapshot.containers
+    .filter((container) => container.pageId === page.id)
+    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+    .map((container) => ({
+      record: container,
+      cards: snapshot.cards
+        .filter((card) => card.containerId === container.id)
+        .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id)),
+    }));
+}
+
+function PublishedAttachments({
+  attachments,
+  repository,
+}: {
+  attachments: readonly Attachment[];
+  repository: RepositorySnapshotResponse['repository'];
+}) {
+  if (attachments.length === 0) return null;
+  return (
+    <ul className="public-card-attachments">
+      {attachments.map((attachment) => {
+        const source =
+          'url' in attachment
+            ? attachment.url
+            : `https://raw.githubusercontent.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/${repository.branch
+                .split('/')
+                .map(encodeURIComponent)
+                .join(
+                  '/',
+                )}/content/media/${attachment.assetId}.${assetExtensionForMimeType(attachment.mimeType)}`;
+        if (attachment.kind === 'image') {
+          return (
+            <li key={attachment.id}>
+              <a href={source} target="_blank" rel="noreferrer">
+                <img src={source} alt={attachment.label} loading="lazy" />
+                <span>{attachment.label}</span>
+              </a>
+            </li>
+          );
+        }
+        if (attachment.kind === 'audio' || attachment.kind === 'video') {
+          const Player = attachment.kind;
+          return (
+            <li key={attachment.id}>
+              <p>{attachment.label}</p>
+              <Player controls preload="none">
+                <source src={source} type={attachment.mimeType} />
+              </Player>
+            </li>
+          );
+        }
+        return (
+          <li key={attachment.id}>
+            <a href={source} target="_blank" rel="noreferrer">
+              {attachment.label}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function PublishedCard({
+  card,
   page,
   snapshot,
-  level,
+  headingLevel = 2,
 }: {
-  page: PageNode;
+  card: CardRecordV2;
+  page: PageRecordV2;
   snapshot: RepositorySnapshotResponse;
-  level: number;
+  headingLevel?: 1 | 2;
 }) {
-  const [selectedCardIds, setSelectedCardIds] = useState<Record<string, string>>({});
-  const activeCardIds = Object.fromEntries(
-    Object.entries(selectedCardIds).filter(([containerId, cardId]) =>
-      snapshot.cards.some((card) => card.containerId === containerId && card.id === cardId),
-    ),
-  );
-  const previews = resolveRepositoryPagePreviews(snapshot, page.id, activeCardIds);
-  const parentPage = page.parentId
-    ? snapshot.pages.find((candidate) => candidate.id === page.parentId)
-    : null;
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   return (
-    <section className="published-page" aria-labelledby={`page-${page.id}`}>
-      <CardSummary
-        title={page.title}
-        titleIcon="promptContinue"
-        category={parentPage?.title ?? 'Documentation'}
-        interactive={false}
-        titleLevel={Math.min(level + 1, 6)}
-        titleId={`page-${page.id}`}
-        className="published-record-summary"
-        classNames={{
-          title: 'published-record-summary-title',
-          tag: 'published-record-summary-category',
-        }}
-      />
-      {page.description && <p className="published-page-description">{page.description}</p>}
-      {previews.length === 0 ? (
-        <p className="published-card-empty">No card containers on this page.</p>
-      ) : (
-        previews.map((preview) => {
-          const activeCard = preview.activeCard;
-          const containerLabel = preview.container.title;
-          return (
-            <div
-              key={preview.container.id}
-              className="published-card-list"
-              role="group"
-              aria-label={`Cards for ${page.title}: ${preview.container.title}`}
-            >
-              <CardSummary
-                title={preview.container.title}
-                titleIcon="promptContinue"
-                category={page.title}
-                interactive={false}
-                className="published-record-summary published-container-summary"
-                classNames={{
-                  title: 'published-record-summary-title',
-                  tag: 'published-record-summary-category',
-                }}
-              />
-              <CardConnector className="backend-card-editor-connector published-card-connector" />
-              <CardPreview
-                {...backendWorkspaceCopy.cardPreview}
-                title={activeCard?.title ?? 'This container has no cards'}
-                category={page.title}
-                description={
-                  activeCard?.definition ?? 'Add a card to this container to begin the preview.'
-                }
-                {...(activeCard?.keyRule !== undefined ? { keyRule: activeCard.keyRule } : {})}
-                {...(activeCard?.code !== undefined ? { code: activeCard.code } : {})}
-                {...(activeCard?.spec !== undefined ? { spec: activeCard.spec } : {})}
-                attachments={activeCard?.attachments ?? []}
-                repository={snapshot.repository}
-                carousel={
-                  <CarouselControls
-                    items={preview.cards}
-                    activeItemId={activeCard?.id ?? null}
-                    onSelect={(cardId) =>
-                      setSelectedCardIds((current) => ({
-                        ...current,
-                        [preview.container.id]: cardId,
-                      }))
-                    }
-                    ariaLabel={`Card carousel for ${containerLabel}`}
-                    previousLabel={`Previous card in ${containerLabel}`}
-                    nextLabel={`Next card in ${containerLabel}`}
-                    indicatorLabel={(card, index) =>
-                      `Show card ${index + 1} in ${containerLabel}: ${card.title}`
-                    }
-                    className="backend-card-carousel"
-                  />
-                }
-                actions={cardToolbarActions}
-                classNames={{
-                  root: 'published-card-preview',
-                  content: 'backend-card-editor-content',
-                  contentHeader: 'backend-card-editor-content-header',
-                  contentTitle: 'backend-card-editor-content-title',
-                  toolbar: 'backend-card-editor-toolbar',
-                  toolbarTrack: 'backend-card-editor-toolbar-track',
-                  toolbarItem: 'backend-card-editor-tool',
-                  notes: 'backend-card-editor-input',
-                }}
-              />
-            </div>
-          );
-        })
-      )}
-      {page.children.map((child) => (
-        <PageView key={child.id} page={child} snapshot={snapshot} level={level + 1} />
-      ))}
-    </section>
+    <article className="public-card">
+      <header className="public-card-content">
+        <div className="public-card-heading">
+          <Icon name="promptContinue" size={14} />
+          <Heading>
+            <Link to={getCardPath(card, page, snapshot)}>{card.title}</Link>
+          </Heading>
+          <span className="public-card-category">{page.title}</span>
+        </div>
+        <div className="public-card-body">
+          <p>{card.definition}</p>
+          {card.keyRule && (
+            <section className="public-card-key-rule">
+              <h3>Key rule</h3>
+              <p>{card.keyRule}</p>
+            </section>
+          )}
+          {card.code && <pre className="public-card-code">{card.code}</pre>}
+          {card.spec && (
+            <p>
+              <strong>Specification:</strong> {card.spec}
+            </p>
+          )}
+          <PublishedAttachments attachments={card.attachments} repository={snapshot.repository} />
+        </div>
+      </header>
+      <div className="public-card-toolbar" aria-hidden="true">
+        {PUBLIC_CARD_TOOL_ICONS.map((name) => (
+          <span className="public-card-tool" key={name}>
+            <Icon name={name} size={18} />
+          </span>
+        ))}
+      </div>
+      <div className="public-card-notes" aria-hidden="true">
+        <Icon name="promptContinue" size={14} />
+        <span>Type notes or commands on a straight line...</span>
+      </div>
+    </article>
+  );
+}
+
+function PageSummary({
+  page,
+  parent,
+  id,
+}: {
+  page: PageRecordV2;
+  parent: PageRecordV2 | null;
+  id: string;
+}) {
+  return (
+    <header className="public-page-summary">
+      <Icon name="promptContinue" size={14} />
+      <h1 id={id}>{page.title}</h1>
+      <span>{parent?.title ?? 'Documentation'}</span>
+    </header>
+  );
+}
+
+function PageLink({ page, pages }: { page: PageRecordV2; pages: readonly PageRecordV2[] }) {
+  const parent = page.parentId ? pages.find((candidate) => candidate.id === page.parentId) : null;
+  return (
+    <Link className="public-page-link" to={getPagePath(page, pages)}>
+      <span className="public-page-link-heading">
+        <Icon name="promptContinue" size={14} />
+        <strong>{page.title}</strong>
+        <span>{parent?.title ?? 'Documentation'}</span>
+      </span>
+      {page.description && <span className="public-page-link-description">{page.description}</span>}
+    </Link>
   );
 }
 
@@ -153,65 +304,45 @@ function errorMessage(error: unknown): string {
   return `Could not load the documentation (${code}).`;
 }
 
-function HomeLocationTrail() {
-  const viewport = useRef<HTMLDivElement>(null);
-  const activeDrag = useRef<{ pointerId: number; startX: number; scrollLeft: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  function startDrag(event: PointerEvent<HTMLDivElement>) {
-    const element = event.currentTarget;
-    if (
-      event.pointerType !== 'mouse' ||
-      event.button !== 0 ||
-      element.scrollWidth <= element.clientWidth
-    ) {
-      return;
-    }
-    activeDrag.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      scrollLeft: element.scrollLeft,
-    };
-    setIsDragging(true);
-    element.setPointerCapture?.(event.pointerId);
-  }
-
-  function moveTrail(event: PointerEvent<HTMLDivElement>) {
-    const drag = activeDrag.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    event.currentTarget.scrollLeft = drag.scrollLeft - (event.clientX - drag.startX);
-  }
-
-  function stopDrag(event: PointerEvent<HTMLDivElement>) {
-    if (activeDrag.current?.pointerId !== event.pointerId) return;
-    activeDrag.current = null;
-    setIsDragging(false);
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  }
-
+function LocationBreadcrumbs({
+  breadcrumbs,
+  card,
+}: {
+  breadcrumbs: readonly PageBreadcrumb[];
+  card: CardRecordV2 | null;
+}) {
   return (
     <nav className="home-location-bar" aria-label="Current location">
-      <div
-        ref={viewport}
-        className={`home-location-track${isDragging ? 'is-dragging' : ''}`}
-        tabIndex={0}
-        onPointerDown={startDrag}
-        onPointerMove={moveTrail}
-        onPointerUp={stopDrag}
-        onPointerCancel={stopDrag}
-      >
-        <ol>
-          <li aria-current="page">
-            <h1 id="home-title">Home</h1>
+      <ol className="home-location-track">
+        <li>
+          <Link to="/home">Home</Link>
+        </li>
+        {breadcrumbs.map((item, index) => (
+          <li
+            key={item.id}
+            aria-current={!card && index === breadcrumbs.length - 1 ? 'page' : undefined}
+          >
+            {index === breadcrumbs.length - 1 && !card ? (
+              <span>{item.title}</span>
+            ) : (
+              <Link to={item.path}>{item.title}</Link>
+            )}
           </li>
-        </ol>
-      </div>
+        ))}
+        {card && (
+          <li aria-current="page">
+            <span>{card.title}</span>
+          </li>
+        )}
+      </ol>
     </nav>
   );
 }
 
 export function HomePage() {
   const { githubRequest } = useAuth();
+  const { pathname } = useLocation();
+  const normalizedPathname = pathname.replace(/\/+$/, '') || '/home';
   const client = useMemo(() => createGitHubRepositoryClient(githubRequest), [githubRequest]);
   const [snapshot, setSnapshot] = useState<RepositorySnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -238,10 +369,41 @@ export function HomePage() {
     };
   }, [client, reload]);
 
-  const pageTree = useMemo(() => buildPageTree(snapshot?.pages ?? []), [snapshot]);
+  const rootPages = useMemo(
+    () =>
+      (snapshot?.pages ?? [])
+        .filter((page) => page.parentId === null)
+        .sort((left, right) => left.order - right.order || left.slug.localeCompare(right.slug)),
+    [snapshot],
+  );
+  const route = useMemo(
+    () => (snapshot ? resolvePublicRoute(normalizedPathname, snapshot) : null),
+    [normalizedPathname, snapshot],
+  );
+  const selectedPage = route?.page ?? null;
+  const parentPage = selectedPage?.parentId
+    ? (snapshot?.pages.find((page) => page.id === selectedPage.parentId) ?? null)
+    : null;
+  const childPages = selectedPage
+    ? (snapshot?.pages
+        .filter((page) => page.parentId === selectedPage.id)
+        .sort((left, right) => left.order - right.order || left.slug.localeCompare(right.slug)) ??
+      [])
+    : [];
+  const containers = selectedPage && snapshot ? cardsForPage(selectedPage, snapshot) : [];
+  const selectedCard = route?.card ?? null;
+  const pageForCard = selectedCard ? selectedPage : null;
+  const cardNotFound = Boolean(
+    route &&
+    selectedPage &&
+    !selectedCard &&
+    normalizedPathname !== getPagePath(selectedPage, snapshot?.pages ?? []),
+  );
+  const invalidRoute = Boolean(snapshot && normalizedPathname !== '/home' && !selectedPage);
+
   return (
-    <section className="documentation-home" aria-labelledby="home-title">
-      <HomeLocationTrail />
+    <section className="documentation-home" aria-label="Documentation">
+      <LocationBreadcrumbs breadcrumbs={route?.breadcrumbs ?? []} card={selectedCard} />
       <div className="documentation-home-content">
         {error && (
           <div className="status-message status-error" role="alert">
@@ -251,11 +413,77 @@ export function HomePage() {
             </Button>
           </div>
         )}
-        {!loading && !error && snapshot && (
-          <div className="published-page-tree">
-            {pageTree.map((page) => (
-              <PageView key={page.id} page={page} snapshot={snapshot} level={1} />
+        {!loading && !error && snapshot && normalizedPathname === '/home' && (
+          <div className="public-page-index" aria-label="Documentation pages">
+            <h1>Home</h1>
+            {rootPages.map((page) => (
+              <PageLink key={page.id} page={page} pages={snapshot.pages} />
             ))}
+          </div>
+        )}
+        {!loading &&
+          !error &&
+          snapshot &&
+          selectedPage &&
+          pageForCard === null &&
+          !cardNotFound && (
+            <article className="public-page" aria-labelledby={`public-page-${selectedPage.id}`}>
+              <PageSummary
+                page={selectedPage}
+                parent={parentPage}
+                id={`public-page-${selectedPage.id}`}
+              />
+              {selectedPage.description && (
+                <p className="public-page-description">{selectedPage.description}</p>
+              )}
+              {childPages.length > 0 && (
+                <nav
+                  className="public-page-children"
+                  aria-label={`Pages under ${selectedPage.title}`}
+                >
+                  {childPages.map((page) => (
+                    <PageLink key={page.id} page={page} pages={snapshot.pages} />
+                  ))}
+                </nav>
+              )}
+              {containers.map(({ record, cards }) => (
+                <section
+                  className="public-container"
+                  key={record.id}
+                  aria-label={`Cards in ${record.title}`}
+                >
+                  {record.title && <h2 className="public-container-title">{record.title}</h2>}
+                  {cards.length === 0 ? (
+                    <p className="public-card-empty">No cards in this container yet.</p>
+                  ) : (
+                    cards.map((card) => (
+                      <PublishedCard
+                        key={card.id}
+                        card={card}
+                        page={selectedPage}
+                        snapshot={snapshot}
+                      />
+                    ))
+                  )}
+                </section>
+              ))}
+            </article>
+          )}
+        {!loading && !error && snapshot && selectedCard && pageForCard && (
+          <article className="public-card-page">
+            <PublishedCard
+              card={selectedCard}
+              page={pageForCard}
+              snapshot={snapshot}
+              headingLevel={1}
+            />
+          </article>
+        )}
+        {!loading && !error && snapshot && (invalidRoute || cardNotFound) && (
+          <div className="public-not-found" role="status">
+            <h1>Page not found</h1>
+            <p>This documentation page or card does not exist.</p>
+            <Link to="/home">Browse documentation</Link>
           </div>
         )}
       </div>

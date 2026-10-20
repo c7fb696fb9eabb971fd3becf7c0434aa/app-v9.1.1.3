@@ -41,7 +41,9 @@ export function AppRoutes() {
   const { user, isCheckingSession, sessionRestoreError } = useAuth();
   const { pathname } = useLocation();
   const normalizedPathname = pathname.replace(/\/+$/, '') || APP_ROUTES.publicHome;
-  const isDocumentationHome = normalizedPathname === APP_ROUTES.home;
+  const isDocumentationHome =
+    normalizedPathname === APP_ROUTES.home ||
+    normalizedPathname.startsWith(`${APP_ROUTES.home}/`);
   const mainContentClass = isDocumentationHome ? 'main-content main-content-home' : 'main-content';
 
   if (normalizedPathname === APP_ROUTES.backend) {
@@ -98,7 +100,7 @@ export function AppRoutes() {
             }
           />
           <Route
-            path={APP_ROUTES.home}
+            path={`${APP_ROUTES.home}/*`}
             element={
               <ProtectedRoute>
                 <RouteErrorBoundary route="home">
