@@ -105,6 +105,15 @@ function cardsForPage(
     }));
 }
 
+function childPagesForPage(
+  page: PageRecordV2,
+  snapshot: RepositorySnapshotResponse,
+): PageRecordV2[] {
+  return snapshot.pages
+    .filter((candidate) => candidate.parentId === page.id)
+    .sort((left, right) => left.order - right.order || left.slug.localeCompare(right.slug));
+}
+
 function PublishedAttachments({
   attachments,
   repository,
@@ -291,6 +300,7 @@ export function HomePage() {
   );
   const selectedPage = route?.page ?? null;
   const containers = selectedPage && snapshot ? cardsForPage(selectedPage, snapshot) : [];
+  const childPages = selectedPage && snapshot ? childPagesForPage(selectedPage, snapshot) : [];
   const invalidRoute = Boolean(snapshot && normalizedPathname !== '/home' && !selectedPage);
 
   return (
@@ -314,6 +324,13 @@ export function HomePage() {
         )}
         {!loading && !error && snapshot && selectedPage && !invalidRoute && (
           <article className="public-page" aria-label={selectedPage.title}>
+            {childPages.length > 0 && (
+              <nav className="public-page-index" aria-label={`Pages under ${selectedPage.title}`}>
+                {childPages.map((page) => (
+                  <PageLink key={page.id} page={page} pages={snapshot.pages} />
+                ))}
+              </nav>
+            )}
             {containers.map(({ record, cards }) => (
               <section
                 className="public-container"

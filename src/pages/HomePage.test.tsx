@@ -113,14 +113,20 @@ describe('HomePage', () => {
     expect(screen.queryByRole('heading', { name: 'Home' })).not.toBeInTheDocument();
     const rootLink = await screen.findByRole('link', { name: /vscode/ });
     expect(rootLink).toHaveAttribute('href', '/home/vscode');
-    expect(screen.queryByRole('link', { name: /environment/ })).not.toBeInTheDocument();
 
     fireEvent.click(rootLink);
     expect(await screen.findByRole('navigation', { name: 'Current location' })).toHaveTextContent(
       'vscode',
     );
     expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /environment/ })).not.toBeInTheDocument();
+    const childPageLink = screen.getByRole('link', { name: /environment/ });
+    expect(childPageLink).toHaveAttribute('href', '/home/vscode/environment');
+    expect(screen.queryByText('Review checklist content.')).not.toBeInTheDocument();
+    fireEvent.click(childPageLink);
+    expect(await screen.findByLabelText('Current path')).toHaveTextContent(
+      '/home/vscode/environment',
+    );
+    expect(screen.getByRole('heading', { name: 'review' })).toBeVisible();
   });
 
   it('shows a page and its cards at the page URL without child links or card routes', async () => {
@@ -163,7 +169,17 @@ describe('HomePage', () => {
     );
     expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
     expect(screen.queryByText('Review checklist content.')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /environment/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /environment/ })).toHaveAttribute(
+      'href',
+      '/home/vscode/environment',
+    );
+  });
+
+  it('does not show a subpage list on a page without nested pages', async () => {
+    renderHome('/home/vscode/environment');
+
+    expect(await screen.findByRole('heading', { name: 'review' })).toBeVisible();
+    expect(screen.queryByRole('navigation', { name: /Pages under/ })).not.toBeInTheDocument();
   });
 
   it('renders attachments using public repository and external URLs', async () => {

@@ -16,9 +16,6 @@ function PublicRouteProbe() {
     <>
       <button onClick={() => navigate('/')}>Go to public route</button>
       <button onClick={() => navigate('/backend')}>Go to backend route</button>
-      <button onClick={() => navigate('/home/getting-started/installation')}>
-        Go to nested page
-      </button>
       <output aria-label="Current test route">{location.pathname}</output>
     </>
   );
@@ -314,8 +311,9 @@ describe('public route and drawer', () => {
         await screen.findByRole('navigation', { name: 'Current location' }),
       ).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Getting started' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: /Installation/ })).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Go to nested page' }));
+      const nestedPageLink = screen.getByRole('link', { name: /Installation/ });
+      expect(nestedPageLink).toHaveAttribute('href', '/home/getting-started/installation');
+      fireEvent.click(nestedPageLink);
       expect(
         await screen.findByRole('navigation', { name: 'Current location' }),
       ).toBeInTheDocument();
