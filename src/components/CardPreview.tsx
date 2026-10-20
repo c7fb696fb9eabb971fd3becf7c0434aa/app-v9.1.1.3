@@ -107,15 +107,21 @@ export function CardSummary({
   category,
   className = '',
   classNames = {},
+  interactive = true,
+  titleLevel,
+  titleId,
   onClick,
 }: {
   title: string;
   titleIcon: IconName;
-  updatedLabel: string;
-  updatedAt: string;
-  formattedDate: string;
+  updatedLabel?: string;
+  updatedAt?: string;
+  formattedDate?: string;
   category: string;
   className?: string;
+  interactive?: boolean;
+  titleLevel?: number;
+  titleId?: string;
   classNames?: Partial<{
     title: string;
     updated: string;
@@ -125,20 +131,32 @@ export function CardSummary({
   }>;
   onClick?: () => void;
 }) {
-  return (
-    <Button type="button" className={className} onClick={onClick}>
+  const summary = (
+    <>
       <span className={classNames.title}>
         <Icon name={titleIcon} size={14} />
-        <span>{title}</span>
-      </span>
-      <span className={classNames.updated}>
-        <span className={classNames.status} aria-hidden="true" />
-        <span className={classNames.updatedCopy}>
-          <span>{updatedLabel}</span>
-          <time dateTime={updatedAt}>{formattedDate}</time>
+        <span id={titleId} role={titleLevel ? 'heading' : undefined} aria-level={titleLevel}>
+          {title}
         </span>
       </span>
+      {updatedLabel && updatedAt && formattedDate && (
+        <span className={classNames.updated}>
+          <span className={classNames.status} aria-hidden="true" />
+          <span className={classNames.updatedCopy}>
+            <span>{updatedLabel}</span>
+            <time dateTime={updatedAt}>{formattedDate}</time>
+          </span>
+        </span>
+      )}
       <span className={classNames.tag}>{category}</span>
+    </>
+  );
+
+  if (!interactive) return <div className={className}>{summary}</div>;
+
+  return (
+    <Button type="button" className={className} onClick={onClick}>
+      {summary}
     </Button>
   );
 }

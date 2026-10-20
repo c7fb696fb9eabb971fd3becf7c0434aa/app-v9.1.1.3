@@ -143,6 +143,13 @@ describe('HomePage', () => {
     render(<HomePage />);
     expect(await screen.findByText('First content.')).toBeInTheDocument();
     expect(screen.queryByText('Second content.')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Platform' })).toHaveAttribute('aria-level', '2');
+    expect(screen.getByRole('heading', { name: 'Empty child' })).toHaveAttribute('aria-level', '3');
+    expect(document.querySelector('.published-container-summary')).toHaveTextContent('Platform');
+    expect(screen.getAllByRole('toolbar', { name: 'Card actions' }).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('textbox', { name: 'Card notes or commands' }).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Next card in Platform' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Next card in Empty child' }),
@@ -150,7 +157,7 @@ describe('HomePage', () => {
     expect(
       screen.queryByRole('button', { name: 'Next card in Single card' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('No cards in this container.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'This container has no cards' })).toBeVisible();
     expect(screen.getByText('Single-card content.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next card in Platform' }));
@@ -160,7 +167,7 @@ describe('HomePage', () => {
       screen.getByRole('button', {
         name: 'Show card 2 in Platform: Second platform card',
       }),
-    ).toHaveClass('published-card-carousel-indicator', 'is-active');
+    ).toHaveClass('backend-card-carousel-indicator', 'is-active');
     fireEvent.click(
       screen.getByRole('button', { name: 'Show card 1 in Platform: First platform card' }),
     );
@@ -248,7 +255,7 @@ describe('HomePage', () => {
       'href',
       'https://example.test/reference',
     );
-    expect(screen.getByText('No cards in this container.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'This container has no cards' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Next card in Guides' }));
     expect(await screen.findByText('Second guide content.')).toBeInTheDocument();
     expect(screen.queryByText('First guide content.')).not.toBeInTheDocument();

@@ -1,14 +1,10 @@
-import { createElement, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import {
-  type CardRecordV2,
-  type PageRecordV2,
-  type RepositorySnapshotResponse,
-} from '../lib/content';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { type PageRecordV2, type RepositorySnapshotResponse } from '../lib/content';
 import { useAuth } from '../features/auth';
 import { createGitHubRepositoryClient } from '../features/github';
-import { Button } from '../components/Primitives';
-import { CardAttachments, CarouselControls } from '../components';
+import { Button, CardConnector, CardPreview, CardSummary, CarouselControls } from '../components';
 import { resolveRepositoryPagePreviews } from '../lib/content-resolution';
+import { backendWorkspaceCopy, cardToolbarActions } from './backendWorkspaceConfig';
 
 type RepositoryPageRecord = PageRecordV2;
 
@@ -31,36 +27,6 @@ function buildPageTree(pages: readonly RepositoryPageRecord[]): PageNode[] {
   return roots;
 }
 
-function CardView({
-  card,
-  snapshot,
-}: {
-  card: CardRecordV2;
-  snapshot: RepositorySnapshotResponse;
-}) {
-  return (
-    <article className="published-card">
-      <header className="published-card-header">
-        <h3>{card.title}</h3>
-        {card.tag && <span className="published-card-tag">{card.tag}</span>}
-      </header>
-      <p>{card.definition}</p>
-      {card.keyRule && (
-        <p>
-          <strong>Key rule:</strong> {card.keyRule}
-        </p>
-      )}
-      {card.code && <pre className="published-card-code">{card.code}</pre>}
-      {card.spec && (
-        <p>
-          <strong>Specification:</strong> {card.spec}
-        </p>
-      )}
-      <CardAttachments attachments={card.attachments} repository={snapshot.repository} />
-    </article>
-  );
-}
-
 function PageView({
   page,
   snapshot,
@@ -77,14 +43,24 @@ function PageView({
     ),
   );
   const previews = resolveRepositoryPagePreviews(snapshot, page.id, activeCardIds);
-  const heading = createElement(
-    `h${Math.min(level + 1, 6)}`,
-    { id: `page-${page.id}` },
-    page.title,
-  );
+  const parentPage = page.parentId
+    ? snapshot.pages.find((candidate) => candidate.id === page.parentId)
+    : null;
   return (
     <section className="published-page" aria-labelledby={`page-${page.id}`}>
-      {heading}
+      <CardSummary
+        title={page.title}
+        titleIcon="promptContinue"
+        category={parentPage?.title ?? 'Documentation'}
+        interactive={false}
+        titleLevel={Math.min(level + 1, 6)}
+        titleId={`page-${page.id}`}
+        className="published-record-summary"
+        classNames={{
+          title: 'published-record-summary-title',
+          tag: 'published-record-summary-category',
+        }}
+      />
       {page.description && <p className="published-page-description">{page.description}</p>}
       {previews.length === 0 ? (
         <p className="published-card-empty">No card containers on this page.</p>
@@ -99,27 +75,60 @@ function PageView({
               role="group"
               aria-label={`Cards for ${page.title}: ${preview.container.title}`}
             >
-              {activeCard ? (
-                <CardView key={activeCard.id} card={activeCard} snapshot={snapshot} />
-              ) : (
-                <p className="published-card-empty">No cards in this container.</p>
-              )}
-              <CarouselControls
-                items={preview.cards}
-                activeItemId={activeCard?.id ?? null}
-                onSelect={(cardId) =>
-                  setSelectedCardIds((current) => ({
-                    ...current,
-                    [preview.container.id]: cardId,
-                  }))
+              <CardSummary
+                title={preview.container.title}
+                titleIcon="promptContinue"
+                category={page.title}
+                interactive={false}
+                className="published-record-summary published-container-summary"
+                classNames={{
+                  title: 'published-record-summary-title',
+                  tag: 'published-record-summary-category',
+                }}
+              />
+              <CardConnector className="backend-card-editor-connector published-card-connector" />
+              <CardPreview
+                {...backendWorkspaceCopy.cardPreview}
+                title={activeCard?.title ?? 'This container has no cards'}
+                category={page.title}
+                description={
+                  activeCard?.definition ?? 'Add a card to this container to begin the preview.'
                 }
-                ariaLabel={`Card carousel for ${containerLabel}`}
-                previousLabel={`Previous card in ${containerLabel}`}
-                nextLabel={`Next card in ${containerLabel}`}
-                indicatorLabel={(card, index) =>
-                  `Show card ${index + 1} in ${containerLabel}: ${card.title}`
+                {...(activeCard?.keyRule !== undefined ? { keyRule: activeCard.keyRule } : {})}
+                {...(activeCard?.code !== undefined ? { code: activeCard.code } : {})}
+                {...(activeCard?.spec !== undefined ? { spec: activeCard.spec } : {})}
+                attachments={activeCard?.attachments ?? []}
+                repository={snapshot.repository}
+                carousel={
+                  <CarouselControls
+                    items={preview.cards}
+                    activeItemId={activeCard?.id ?? null}
+                    onSelect={(cardId) =>
+                      setSelectedCardIds((current) => ({
+                        ...current,
+                        [preview.container.id]: cardId,
+                      }))
+                    }
+                    ariaLabel={`Card carousel for ${containerLabel}`}
+                    previousLabel={`Previous card in ${containerLabel}`}
+                    nextLabel={`Next card in ${containerLabel}`}
+                    indicatorLabel={(card, index) =>
+                      `Show card ${index + 1} in ${containerLabel}: ${card.title}`
+                    }
+                    className="backend-card-carousel"
+                  />
                 }
-                className="published-card-carousel"
+                actions={cardToolbarActions}
+                classNames={{
+                  root: 'published-card-preview',
+                  content: 'backend-card-editor-content',
+                  contentHeader: 'backend-card-editor-content-header',
+                  contentTitle: 'backend-card-editor-content-title',
+                  toolbar: 'backend-card-editor-toolbar',
+                  toolbarTrack: 'backend-card-editor-toolbar-track',
+                  toolbarItem: 'backend-card-editor-tool',
+                  notes: 'backend-card-editor-input',
+                }}
               />
             </div>
           );
