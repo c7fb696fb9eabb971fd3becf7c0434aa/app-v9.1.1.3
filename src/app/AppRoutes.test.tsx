@@ -16,6 +16,9 @@ function PublicRouteProbe() {
     <>
       <button onClick={() => navigate('/')}>Go to public route</button>
       <button onClick={() => navigate('/backend')}>Go to backend route</button>
+      <button onClick={() => navigate('/home/getting-started/installation')}>
+        Go to nested page
+      </button>
       <output aria-label="Current test route">{location.pathname}</output>
     </>
   );
@@ -311,22 +314,17 @@ describe('public route and drawer', () => {
         await screen.findByRole('navigation', { name: 'Current location' }),
       ).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Getting started' })).not.toBeInTheDocument();
-      const childPageLink = screen.getByRole('link', { name: /Installation/ });
-      expect(childPageLink).toHaveAttribute('href', '/home/getting-started/installation');
-      fireEvent.click(childPageLink);
+      expect(screen.queryByRole('link', { name: /Installation/ })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Go to nested page' }));
       expect(
         await screen.findByRole('navigation', { name: 'Current location' }),
       ).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'Installation' })).not.toBeInTheDocument();
-      const cardLink = screen.getByRole('link', { name: 'Install the app' });
-      expect(cardLink).toHaveAttribute(
-        'href',
-        '/home/getting-started/installation/install-the-app',
+      expect(await screen.findByLabelText('Current test route')).toHaveTextContent(
+        '/home/getting-started/installation',
       );
-      fireEvent.click(cardLink);
-      expect(
-        await screen.findByRole('heading', { name: 'Install the app', level: 1 }),
-      ).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Installation' })).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Install the app' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Install the app' })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Open right navigation' }));
       const rightBrand = within(screen.getByRole('dialog', { name: 'Right navigation' })).getByRole(
         'link',

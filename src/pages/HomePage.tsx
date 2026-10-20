@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   assetExtensionForMimeType,
-  CONTENT_LIMITS,
   type Attachment,
   type CardContainerRecordV2,
   type CardRecordV2,
@@ -15,7 +14,6 @@ import { Button } from '../components/Primitives';
 import { Icon, type IconName } from '../components/Icon';
 
 type PageBreadcrumb = {
-  id: string;
   title: string;
   path: string;
 };
@@ -43,17 +41,6 @@ const PUBLIC_CARD_TOOL_ICONS: readonly IconName[] = [
   'attachPdf',
 ];
 
-function slugFromTitle(title: string): string {
-  const slug = title
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, CONTENT_LIMITS.titleCharacters)
-    .replace(/-+$/g, '');
-  return slug || 'card';
-}
-
 function getPagePath(page: PageRecordV2, pages: readonly PageRecordV2[]): string {
   const segments = [page.slug];
   let current = page;
@@ -66,29 +53,10 @@ function getPagePath(page: PageRecordV2, pages: readonly PageRecordV2[]): string
   return `/home/${segments.map(encodeURIComponent).join('/')}`;
 }
 
-function getCardPath(
-  card: CardRecordV2,
-  page: PageRecordV2,
-  snapshot: RepositorySnapshotResponse,
-): string {
-  const pageContainers = snapshot.containers.filter((container) => container.pageId === page.id);
-  const pageCards = snapshot.cards.filter((candidate) =>
-    pageContainers.some((container) => container.id === candidate.containerId),
-  );
-  const segment = slugFromTitle(card.title);
-  const segmentIsAmbiguous =
-    pageCards.filter((candidate) => slugFromTitle(candidate.title) === segment).length > 1 ||
-    snapshot.pages.some(
-      (candidate) => candidate.parentId === page.id && candidate.slug === segment,
-    );
-  const cardSegment = segmentIsAmbiguous ? `${segment}-${card.id}` : segment;
-  return `${getPagePath(page, snapshot.pages)}/${encodeURIComponent(cardSegment)}`;
-}
-
 function resolvePublicRoute(
   pathname: string,
   snapshot: RepositorySnapshotResponse,
-): { page: PageRecordV2 | null; card: CardRecordV2 | null; breadcrumbs: PageBreadcrumb[] } {
+): { page: PageRecordV2 | null; breadcrumbs: PageBreadcrumb[] } {
   let segments: string[];
   try {
     segments = pathname
@@ -97,9 +65,9 @@ function resolvePublicRoute(
       .filter(Boolean)
       .map((segment) => decodeURIComponent(segment));
   } catch {
-    return { page: null, card: null, breadcrumbs: [] };
+    return { page: null, breadcrumbs: [] };
   }
-  if (segments.length === 0) return { page: null, card: null, breadcrumbs: [] };
+  if (segments.length === 0) return { page: null, breadcrumbs: [] };
 
   let parentId: string | null = null;
   const matchedPages: PageRecordV2[] = [];
@@ -112,30 +80,14 @@ function resolvePublicRoute(
     parentId = nextPage.id;
   }
   const breadcrumbs = matchedPages.map((page) => ({
-    id: page.id,
     title: page.title,
     path: getPagePath(page, snapshot.pages),
   }));
 
   if (matchedPages.length === segments.length) {
-    return { page: matchedPages.at(-1) ?? null, card: null, breadcrumbs };
+    return { page: matchedPages.at(-1) ?? null, breadcrumbs };
   }
-
-  const selectedPage = matchedPages.at(-1) ?? null;
-  const cardSegment = segments[matchedPages.length];
-  if (!selectedPage || segments.length !== matchedPages.length + 1 || !cardSegment) {
-    return { page: null, card: null, breadcrumbs: [] };
-  }
-  const containers = snapshot.containers.filter(
-    (container) => container.pageId === selectedPage.id,
-  );
-  const cards = snapshot.cards.filter((card) =>
-    containers.some((container) => container.id === card.containerId),
-  );
-  const selectedCard = cards.find(
-    (card) => getCardPath(card, selectedPage, snapshot).split('/').at(-1) === cardSegment,
-  );
-  return { page: selectedPage, card: selectedCard ?? null, breadcrumbs };
+  return { page: null, breadcrumbs: [] };
 }
 
 function cardsForPage(
@@ -208,24 +160,17 @@ function PublishedAttachments({
 
 function PublishedCard({
   card,
-  page,
   snapshot,
-  headingLevel = 2,
 }: {
   card: CardRecordV2;
-  page: PageRecordV2;
   snapshot: RepositorySnapshotResponse;
-  headingLevel?: 1 | 2;
 }) {
-  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   return (
     <article className="public-card">
       <header className="public-card-content">
         <div className="public-card-heading">
           <Icon name="promptContinue" size={14} />
-          <Heading>
-            <Link to={getCardPath(card, page, snapshot)}>{card.title}</Link>
-          </Heading>
+          <h2>{card.title}</h2>
         </div>
         <div className="public-card-body">
           <p>{card.definition}</p>
@@ -282,13 +227,7 @@ function errorMessage(error: unknown): string {
   return `Could not load the documentation (${code}).`;
 }
 
-function LocationBreadcrumbs({
-  breadcrumbs,
-  card,
-}: {
-  breadcrumbs: readonly PageBreadcrumb[];
-  card: CardRecordV2 | null;
-}) {
+function LocationBreadcrumbs({ breadcrumbs }: { breadcrumbs: readonly PageBreadcrumb[] }) {
   return (
     <nav className="home-location-bar" aria-label="Current location">
       <ol className="home-location-track">
@@ -296,22 +235,14 @@ function LocationBreadcrumbs({
           <Link to="/home">Home</Link>
         </li>
         {breadcrumbs.map((item, index) => (
-          <li
-            key={item.id}
-            aria-current={!card && index === breadcrumbs.length - 1 ? 'page' : undefined}
-          >
-            {index === breadcrumbs.length - 1 && !card ? (
+          <li key={item.path} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>
+            {index === breadcrumbs.length - 1 ? (
               <span>{item.title}</span>
             ) : (
               <Link to={item.path}>{item.title}</Link>
             )}
           </li>
         ))}
-        {card && (
-          <li aria-current="page">
-            <span>{card.title}</span>
-          </li>
-        )}
       </ol>
     </nav>
   );
@@ -359,26 +290,12 @@ export function HomePage() {
     [normalizedPathname, snapshot],
   );
   const selectedPage = route?.page ?? null;
-  const childPages = selectedPage
-    ? (snapshot?.pages
-        .filter((page) => page.parentId === selectedPage.id)
-        .sort((left, right) => left.order - right.order || left.slug.localeCompare(right.slug)) ??
-      [])
-    : [];
   const containers = selectedPage && snapshot ? cardsForPage(selectedPage, snapshot) : [];
-  const selectedCard = route?.card ?? null;
-  const pageForCard = selectedCard ? selectedPage : null;
-  const cardNotFound = Boolean(
-    route &&
-    selectedPage &&
-    !selectedCard &&
-    normalizedPathname !== getPagePath(selectedPage, snapshot?.pages ?? []),
-  );
   const invalidRoute = Boolean(snapshot && normalizedPathname !== '/home' && !selectedPage);
 
   return (
     <section className="documentation-home" aria-label="Documentation">
-      <LocationBreadcrumbs breadcrumbs={route?.breadcrumbs ?? []} card={selectedCard} />
+      <LocationBreadcrumbs breadcrumbs={route?.breadcrumbs ?? []} />
       <div className="documentation-home-content">
         {error && (
           <div className="status-message status-error" role="alert">
@@ -395,59 +312,29 @@ export function HomePage() {
             ))}
           </div>
         )}
-        {!loading &&
-          !error &&
-          snapshot &&
-          selectedPage &&
-          pageForCard === null &&
-          !cardNotFound && (
-            <article className="public-page" aria-label={selectedPage.title}>
-              {childPages.length > 0 && (
-                <nav
-                  className="public-page-children"
-                  aria-label={`Pages under ${selectedPage.title}`}
-                >
-                  {childPages.map((page) => (
-                    <PageLink key={page.id} page={page} pages={snapshot.pages} />
-                  ))}
-                </nav>
-              )}
-              {containers.map(({ record, cards }, index) => (
-                <section
-                  className="public-container"
-                  key={record.id}
-                  aria-label={`Card group ${index + 1} on ${selectedPage.title}`}
-                >
-                  {cards.length === 0 ? (
-                    <p className="public-card-empty">No cards in this container yet.</p>
-                  ) : (
-                    cards.map((card) => (
-                      <PublishedCard
-                        key={card.id}
-                        card={card}
-                        page={selectedPage}
-                        snapshot={snapshot}
-                      />
-                    ))
-                  )}
-                </section>
-              ))}
-            </article>
-          )}
-        {!loading && !error && snapshot && selectedCard && pageForCard && (
-          <article className="public-card-page">
-            <PublishedCard
-              card={selectedCard}
-              page={pageForCard}
-              snapshot={snapshot}
-              headingLevel={1}
-            />
+        {!loading && !error && snapshot && selectedPage && !invalidRoute && (
+          <article className="public-page" aria-label={selectedPage.title}>
+            {containers.map(({ record, cards }) => (
+              <section
+                className="public-container"
+                key={record.id}
+                aria-label={`Cards on ${selectedPage.title}`}
+              >
+                {cards.length === 0 ? (
+                  <p className="public-card-empty">No cards in this container yet.</p>
+                ) : (
+                  cards.map((card) => (
+                    <PublishedCard key={card.id} card={card} snapshot={snapshot} />
+                  ))
+                )}
+              </section>
+            ))}
           </article>
         )}
-        {!loading && !error && snapshot && (invalidRoute || cardNotFound) && (
+        {!loading && !error && snapshot && invalidRoute && (
           <div className="public-not-found" role="status">
             <h1>Page not found</h1>
-            <p>This documentation page or card does not exist.</p>
+            <p>This documentation page does not exist.</p>
             <Link to="/home">Browse documentation</Link>
           </div>
         )}

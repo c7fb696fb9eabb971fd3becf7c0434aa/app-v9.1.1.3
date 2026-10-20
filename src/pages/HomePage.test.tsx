@@ -120,39 +120,21 @@ describe('HomePage', () => {
       'vscode',
     );
     expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /environment/ })).toHaveAttribute(
-      'href',
-      '/home/vscode/environment',
-    );
+    expect(screen.queryByRole('link', { name: /environment/ })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('link', { name: /environment/ }));
+  it('shows a page and its cards at the page URL without child links or card routes', async () => {
+    renderHome('/home/vscode/environment');
+
     expect(await screen.findByRole('navigation', { name: 'Current location' })).toHaveTextContent(
       'environment',
     );
-    expect(screen.queryByRole('heading', { name: 'environment' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Environment documentation.')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'review' })).toHaveAttribute(
-      'href',
-      '/home/vscode/environment/review',
-    );
-    expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
-  });
-
-  it('renders a direct card route without adding the container to its URL', async () => {
-    renderHome('/home/vscode/environment/review');
-
-    expect(await screen.findByRole('heading', { name: 'review' })).toBeVisible();
+    expect(screen.getByLabelText('Current path')).toHaveTextContent('/home/vscode/environment');
+    expect(screen.queryByRole('link', { name: /review/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'review' })).toBeVisible();
     expect(screen.getByText('Review checklist content.')).toBeInTheDocument();
-    expect(screen.getByText('Keep the changes focused.')).toBeInTheDocument();
-    expect(screen.getByText('git diff --check')).toBeInTheDocument();
-    expect(screen.queryByText('Publish the reviewed changes.')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Current path')).toHaveTextContent(
-      '/home/vscode/environment/review',
-    );
-    expect(screen.getByRole('link', { name: 'environment' })).toHaveAttribute(
-      'href',
-      '/home/vscode/environment',
-    );
+    expect(screen.getByText('Publish the reviewed changes.')).toBeInTheDocument();
+    expect(screen.queryByText('Environment documentation.')).not.toBeInTheDocument();
   });
 
   it('uses an independent public card layout without editor controls or state', async () => {
@@ -170,6 +152,7 @@ describe('HomePage', () => {
     expect(container.querySelector('.public-page-summary')).toBeNull();
     expect(container.querySelector('.public-page-description')).toBeNull();
     expect(container.querySelector('.public-container-title')).toBeNull();
+    expect(container.querySelector('.public-card-heading')).toBeInTheDocument();
   });
 
   it('does not include cards from nested pages in a parent page', async () => {
@@ -180,40 +163,7 @@ describe('HomePage', () => {
     );
     expect(screen.queryByRole('heading', { name: 'vscode' })).not.toBeInTheDocument();
     expect(screen.queryByText('Review checklist content.')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /environment/ })).toBeInTheDocument();
-  });
-
-  it('disambiguates duplicate card slugs using stable card IDs', async () => {
-    const snapshot = createSnapshot();
-    snapshot.pages.push({
-      schemaVersion: 2,
-      id: '77777777-7777-4777-8777-777777777777',
-      title: 'Review notes',
-      slug: 'review',
-      parentId: childPageId,
-      order: 0,
-    });
-    snapshot.cards.push({
-      schemaVersion: 2,
-      id: '66666666-6666-4666-8666-666666666666',
-      containerId,
-      order: 2,
-      title: 'review',
-      definition: 'Second review card.',
-      attachments: [],
-    });
-    readSnapshot.mockResolvedValueOnce(snapshot);
-
-    renderHome('/home/vscode/environment');
-
-    const reviewLinks = await screen.findAllByRole('link', { name: 'review' });
-    expect(reviewLinks[0]).toHaveAttribute('href', `/home/vscode/environment/review-${cardId}`);
-    expect(reviewLinks[1]).toHaveAttribute(
-      'href',
-      '/home/vscode/environment/review-66666666-6666-4666-8666-666666666666',
-    );
-    fireEvent.click(reviewLinks[1]!);
-    expect(await screen.findByText('Second review card.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /environment/ })).not.toBeInTheDocument();
   });
 
   it('renders attachments using public repository and external URLs', async () => {
@@ -269,8 +219,14 @@ describe('HomePage', () => {
     );
   });
 
-  it('shows an explicit not-found state for unknown page and card paths', async () => {
+  it('shows an explicit not-found state for unknown page paths', async () => {
     renderHome('/home/vscode/environment/missing-card');
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeVisible();
+  });
+
+  it('does not treat a card title as a public route', async () => {
+    renderHome('/home/vscode/environment/review');
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeVisible();
+    expect(screen.queryByText('Review checklist content.')).not.toBeInTheDocument();
   });
 });

@@ -304,7 +304,7 @@ input:focus-visible {
   color: var(--accent-bright);
 }
 .documentation-home-content {
-  width: min(100% - 48px, 1180px);
+  width: min(680px, calc(100% - 48px));
   margin: 0 auto;
   padding-top: 24px;
 }
@@ -323,8 +323,7 @@ input:focus-visible {
   flex: 0 0 auto;
 }
 .public-page-index,
-.public-page,
-.public-card-page {
+.public-page {
   display: grid;
   gap: 20px;
 }
@@ -354,12 +353,6 @@ input:focus-visible {
   color: var(--text-strong);
   font-size: 14px;
   font-weight: 600;
-}
-.public-page-children {
-  display: grid;
-  gap: 8px;
-  padding-left: 16px;
-  border-left: 2px solid var(--accent-deep);
 }
 .public-container {
   display: grid;
@@ -391,26 +384,18 @@ input:focus-visible {
   gap: 10px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
-  background: var(--surface-raised);
+  background: var(--canvas);
 }
 .public-card-heading > svg {
   flex: 0 0 auto;
   color: var(--accent-bright);
 }
-.public-card-heading h1,
 .public-card-heading h2 {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 14px;
   font-weight: 600;
-}
-.public-card-heading a {
-  color: var(--text-strong);
-  text-decoration: none;
-}
-.public-card-heading a:hover {
-  color: var(--accent-bright);
 }
 .public-card-body {
   min-width: 0;
@@ -523,8 +508,7 @@ input:focus-visible {
 .public-not-found a {
   color: var(--accent-bright);
 }
-.public-page,
-.public-card-page {
+.public-page {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -973,7 +957,7 @@ input:focus-visible {
     width: calc(100% - 32px);
   }
   .documentation-home-content {
-    width: calc(100% - 24px);
+    width: calc(100% - 32px);
   }
   .public-page-link-heading,
   .public-card-heading {
